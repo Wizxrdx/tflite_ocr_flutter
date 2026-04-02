@@ -149,4 +149,9 @@ class ImageHelper {
 
     return img.encodeJpg(imageInput);
   }
+
+  // non-maximum suppression
+  void nms(List boxes, List scores, double overlapThresh) {
+
+  }
 }
