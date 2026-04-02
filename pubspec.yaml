@@ -31,7 +31,8 @@ dependencies:
   flutter:
     sdk: flutter
   camera: ^0.10.5+5
-  tflite_flutter: ^0.10.3
+  camera_windows: ^0.2.6+2
+  tflite_flutter: 0.12.1
   image: ^4.0.17
 
 
