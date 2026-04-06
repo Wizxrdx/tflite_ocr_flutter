@@ -8,7 +8,7 @@ import 'dart:typed_data';
 
 class ImageHelper {
   static const _modelPath =
-      "assets/lite-model_east-text-detector_fp16_1.tflite";
+      "assets/east-text-detector_fp16.tflite";
   late Interpreter _interpreter;
   late Tensor _inputTensor;
   late Tensor _outputScoreTensor;
