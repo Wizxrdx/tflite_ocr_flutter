@@ -28,5 +28,5 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/east-text-detector_fp16.tflite
+    - assets/craft-text-detector-fp16.tflite
     - assets/wizardiusbewebicon.png
