@@ -177,19 +177,6 @@ class TextDetection {
     }
   }
 
-  List _create4DTensorBuffer(List<int> shape) {
-    return List.generate(
-      shape[0],
-      (_) => List.generate(
-        shape[1],
-        (_) => List.generate(
-          shape[2],
-          (_) => List<double>.filled(shape[3], 0.0),
-        ),
-      ),
-    );
-  }
-
   String _formatMs(Stopwatch stopwatch) {
     return (stopwatch.elapsedMicroseconds / 1000.0).toStringAsFixed(1);
   }
