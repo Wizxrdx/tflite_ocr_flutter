@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="tflite_text_extraction"
+        android:label="Image2Text"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

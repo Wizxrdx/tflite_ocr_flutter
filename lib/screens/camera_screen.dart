@@ -39,24 +39,29 @@ class _CameraScreenState extends State<CameraScreen> {
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
-            return Column(
+            return Stack(
               children: [
                 Expanded(
                   child: CameraPreview(_controller),
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      final image = await _controller.takePicture();
-                      widget.imageFile(image);
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                    } catch (e) {
-                      log(e.toString());
-                    }
-                  },
-                  child: const Text('Take Picture'),
-                ),
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.lerp(Alignment.bottomCenter, Alignment.topCenter, 0.15)!,
+                    child: ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        final image = await _controller.takePicture();
+                        widget.imageFile(image);
+                        if (!context.mounted) return;
+                        Navigator.pop(context);
+                      } catch (e) {
+                        log(e.toString());
+                      }
+                    },
+                    child: const Icon(Icons.camera),
+                    ),
+                  ),
+                )
               ],
             );
           } else {

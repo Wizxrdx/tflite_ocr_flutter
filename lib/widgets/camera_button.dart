@@ -1,6 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:tflite_text_extraction/services/camera_service.dart';
+import 'package:tflite_text_extraction/screens/camera_screen.dart';
 
 class CameraButton extends StatelessWidget {
 	final List<CameraDescription> cameras;
