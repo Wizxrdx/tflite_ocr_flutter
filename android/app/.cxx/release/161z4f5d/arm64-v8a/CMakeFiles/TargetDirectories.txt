@@ -1,0 +1,2 @@
+D:/Documents/Flutter Projects/tflite_text_extraction/android/app/.cxx/release/161z4f5d/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/Documents/Flutter Projects/tflite_text_extraction/android/app/.cxx/release/161z4f5d/arm64-v8a/CMakeFiles/rebuild_cache.dir
