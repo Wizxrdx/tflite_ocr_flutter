@@ -46,15 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor:
-            ColorScheme.fromSeed(seedColor: Colors.deepPurple).inversePrimary,
-        title: Text(
-          widget.environment == AppEnvironment.testing
-              ? 'Flutter Demo (Testing)'
-              : 'Flutter Demo',
-        ),
-      ),
       body: Stack(
         children: [
           Center(
