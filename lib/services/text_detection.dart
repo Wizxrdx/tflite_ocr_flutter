@@ -213,7 +213,7 @@ class TextDetection {
     // Original CRAFT thresholds (Python reference)
     const double detectionThreshold = 0.7;
     const double textThreshold = 0.4;
-    const double linkThreshold = 0.2;
+    const double linkThreshold = 0.1;
     const int sizeThreshold = 10;
 
     // Extract textmap and linkmap from raw scores
@@ -279,7 +279,8 @@ class TextDetection {
       for (final pixel in componentPixels) {
         final x = pixel % scoreWidth;
         final y = pixel ~/ scoreWidth;
-        if (linkScore[y][x] == 1 && textScore[y][x] == 1) {
+        // Remove pixels that are link-only (link=1, text=0).
+        if (linkScore[y][x] == 1 && textScore[y][x] == 0) {
           continue;
         }
         segmap[y][x] = 255;

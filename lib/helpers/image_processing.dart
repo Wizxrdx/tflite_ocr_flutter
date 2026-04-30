@@ -134,6 +134,8 @@ Future<Uint8List> drawPolygonsOnImage(
 
 Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<List<int>> boxes) {
   final img.Image sourceImage = img.decodeImage(imageBytes)!;
+  final shadowColor = img.ColorRgba8(0, 0, 0, 200);
+  final highlightColor = img.ColorRgba8(0, 255, 0, 255);
 
   for (final box in boxes) {
     final x1 = min(max(box[0], 0), sourceImage.width - 1);
@@ -151,8 +153,18 @@ Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<List<int>> boxes) {
       y1: y1,
       x2: x2,
       y2: y2,
-      color: img.ColorRgb8(0, 255, 0),
-      thickness: 1,
+      color: shadowColor,
+      thickness: 7,
+    );
+
+    img.drawRect(
+      sourceImage,
+      x1: x1,
+      y1: y1,
+      x2: x2,
+      y2: y2,
+      color: highlightColor,
+      thickness: 3,
     );
   }
 
@@ -162,6 +174,8 @@ Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<List<int>> boxes) {
 Uint8List _drawPolygonsOnImageBytes(
     Uint8List imageBytes, List<List<List<double>>> polygons) {
   final img.Image sourceImage = img.decodeImage(imageBytes)!;
+  final shadowColor = img.ColorRgba8(0, 0, 0, 200);
+  final highlightColor = img.ColorRgba8(0, 255, 0, 255);
 
   for (final polygon in polygons) {
     if (polygon.length < 2) {
@@ -183,7 +197,18 @@ Uint8List _drawPolygonsOnImageBytes(
         y1: y1,
         x2: x2,
         y2: y2,
-        color: img.ColorRgb8(0, 255, 0),
+        color: shadowColor,
+        thickness: 7,
+      );
+
+      img.drawLine(
+        sourceImage,
+        x1: x1,
+        y1: y1,
+        x2: x2,
+        y2: y2,
+        color: highlightColor,
+        thickness: 3,
       );
     }
   }
