@@ -1,6 +1,7 @@
 # text_extraction_flutter
-Text Extraction from captured images.
+on-device OCR from captured pictures.
 
 ## models used
 
-[east-text-detector/fp16](https://tfhub.dev/sayakpaul/lite-model/east-text-detector/fp16/1)
+CRAFT Model for text detection
+CRNN Model for text recognition
