@@ -1,4 +1,5 @@
 # Miscellaneous
+.idea
 *.class
 *.lock
 *.log
@@ -55,6 +56,7 @@ unlinked_spec.ds
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
+.tmp_gradle_template/
 *.jks
 
 # iOS/XCode related
