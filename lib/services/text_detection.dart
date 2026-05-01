@@ -210,7 +210,6 @@ class TextDetection {
       int resizedHeight,
       int originalWidth,
       int originalHeight) {
-    // Original CRAFT thresholds (Python reference)
     const double detectionThreshold = 0.7;
     const double textThreshold = 0.4;
     const double linkThreshold = 0.1;
@@ -242,7 +241,6 @@ class TextDetection {
       }
     }
 
-    // CRITICAL: Find components on COMBINED text+link map (Python does this!)
     final combinedScore =
         List.generate(scoreHeight, (_) => List<int>.filled(scoreWidth, 0));
     for (var y = 0; y < scoreHeight; y++) {
