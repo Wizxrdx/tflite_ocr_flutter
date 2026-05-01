@@ -13,7 +13,8 @@ class ImagePickerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton(
+    return FloatingActionButton(
+      heroTag: 'image_picker_button',
       onPressed: () async {
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
@@ -42,7 +43,7 @@ class ImagePickerButton extends StatelessWidget {
           ),
         );
       },
-      child: const Text('Pick Image'),
+      child: const Icon(Icons.image),
     );
   }
 

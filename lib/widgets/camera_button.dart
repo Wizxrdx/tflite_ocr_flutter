@@ -14,19 +14,31 @@ class CameraButton extends StatelessWidget {
 
 	@override
 	Widget build(BuildContext context) {
-		return ElevatedButton(
-			onPressed: () {
-				Navigator.push(
-					context,
-					MaterialPageRoute(
-						builder: (context) => CameraScreen(
-							cameras,
-							imageFile: onImageCaptured,
+		return FloatingActionButton(
+			heroTag: 'camera_button',
+      child: const Icon(Icons.camera_alt),
+			onPressed: () async {
+				try {
+					await Navigator.push(
+						context,
+						MaterialPageRoute(
+							builder: (context) => CameraScreen(
+								cameras,
+								imageFile: onImageCaptured,
+							),
 						),
-					),
-				);
+					);
+				} catch (e, st) {
+					print('Camera open error: $e');
+					print(st);
+					final messenger = ScaffoldMessenger.maybeOf(context);
+					if (messenger != null) {
+						messenger.showSnackBar(
+							SnackBar(content: Text('Camera open error: $e')),
+						);
+					}
+				}
 			},
-			child: const Text('Open Camera'),
 		);
 	}
 }

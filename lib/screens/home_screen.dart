@@ -46,7 +46,24 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      extendBody: false,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        spacing: 16,
+        children: [
+          ImagePickerButton(
+            onImagePicked: _imageProcess,
+          ),
+          CameraButton(
+            cameras: widget.cameras,
+            onImageCaptured: _imageProcess,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: Stack(
         children: [
           Center(
             child: IgnorePointer(
@@ -67,16 +84,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  CameraButton(
-                    cameras: widget.cameras,
-                    onImageCaptured: _imageProcess,
-                  ),
-                  const SizedBox(height: 8),
-                  ImagePickerButton(
-                    onImagePicked: _imageProcess,
-                  ),
-                  const SizedBox(height: 12),
+                  // CameraButton(
+                  //   cameras: widget.cameras,
+                  //   onImageCaptured: _imageProcess,
+                  // ),
+                  // ImagePickerButton(
+                  //   onImagePicked: _imageProcess,
+                  // ),
                 ],
               ),
             ),
@@ -122,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Future<void> _imageProcess(XFile imageFile) async {
