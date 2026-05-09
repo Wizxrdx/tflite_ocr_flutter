@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
+
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import 'package:tflite_text_extraction/helpers/image_processing.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
 import 'package:tflite_text_extraction/widgets/camera_button.dart';
+import 'package:tflite_text_extraction/widgets/image_display_widget.dart' show ImageDisplayWidget;
 import 'package:tflite_text_extraction/widgets/image_picker_button.dart';
 import 'package:tflite_text_extraction/main.dart';
 
@@ -23,18 +26,23 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late ImageProvider _imageProvider;
+  late Uint8List? _imageBytes;
+  late ImageProvider? _imageProvider;
   late TextDetection _textDetection;
   late Future<void> _imageHelperInit;
+  late List<List<List<double>>> _polygons;
   bool _isDetecting = false;
+  
 
   @override
   void initState() {
-    super.initState();
+    super.initState();    
 
     _textDetection = TextDetection();
     _imageHelperInit = _textDetection.init();
+    _imageBytes = null;
     _imageProvider = const AssetImage('assets/wizardiusbewebicon.png');
+    _polygons = [];
   }
 
   @override
@@ -77,20 +85,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Colors.black12,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Image(
-                        image: _imageProvider,
-                        fit: BoxFit.contain,
+                      child: ImageDisplayWidget.fromRawOutput(
+                        imageBytes: _imageBytes,
+                        imageProvider: _imageProvider,
+                        rawPolygons: _polygons,
+                        boxFit: BoxFit.contain,
                         alignment: Alignment.center,
                       ),
                     ),
                   ),
-                  // CameraButton(
-                  //   cameras: widget.cameras,
-                  //   onImageCaptured: _imageProcess,
-                  // ),
-                  // ImagePickerButton(
-                  //   onImagePicked: _imageProcess,
-                  // ),
                 ],
               ),
             ),
@@ -150,15 +153,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Ensure the loading overlay is painted before heavy compute starts.
     await WidgetsBinding.instance.endOfFrame;
+    final imageBytes = await imageFile.readAsBytes();
+
+    setState(() {
+      _imageProvider = null;
+      _imageBytes = imageBytes;
+      _polygons = [];
+    });
 
     try {
       await _imageHelperInit;
       final polygons = await _textDetection.detectPolygons(imageFile);
-      final outputFile = await drawPolygonsOnImage(imageFile, polygons);
+      // final outputFile = await drawPolygonsOnImage(imageFile, polygons);
 
       if (!mounted) return;
       setState(() {
-        _imageProvider = MemoryImage(outputFile);
+        _polygons = polygons;
       });
     } catch (error, stackTrace) {
       print('===== DETECTION ERROR START =====');
