@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
-
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:tflite_text_extraction/models/detection_result.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
 import 'package:tflite_text_extraction/widgets/camera_button.dart';
 import 'package:tflite_text_extraction/widgets/image_display_widget.dart' show ImageDisplayWidget;
@@ -30,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late ImageProvider? _imageProvider;
   late TextDetection _textDetection;
   late Future<void> _imageHelperInit;
-  late List<List<List<double>>> _polygons;
+  late List<Box> _boxes;
   bool _isDetecting = false;
   
 
@@ -42,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _imageHelperInit = _textDetection.init();
     _imageBytes = null;
     _imageProvider = const AssetImage('assets/wizardiusbewebicon.png');
-    _polygons = [];
+    _boxes = [];
   }
 
   @override
@@ -88,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ImageDisplayWidget.fromRawOutput(
                         imageBytes: _imageBytes,
                         imageProvider: _imageProvider,
-                        rawPolygons: _polygons,
+                        rawBoxes: _boxes,
                         boxFit: BoxFit.contain,
                         alignment: Alignment.center,
                       ),
@@ -158,17 +156,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _imageProvider = null;
       _imageBytes = imageBytes;
-      _polygons = [];
+      _boxes = [];
     });
 
     try {
       await _imageHelperInit;
-      final polygons = await _textDetection.detectPolygons(imageFile);
-      // final outputFile = await drawPolygonsOnImage(imageFile, polygons);
+      final rawBoxes = await _textDetection.detectBoxes(imageFile);
+      final detectionResult = TextDetectionResult.fromRawOutput(rawBoxes);
+      // final outputFile = await drawBoxesOnImage(imageFile, boxes);
 
       if (!mounted) return;
       setState(() {
-        _polygons = polygons;
+        _boxes = rawBoxes;
       });
     } catch (error, stackTrace) {
       print('===== DETECTION ERROR START =====');

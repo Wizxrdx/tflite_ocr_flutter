@@ -54,26 +54,65 @@ class Polygon {
   String toString() => 'Polygon(points: $pointCount)';
 }
 
+class Box {
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+
+  const Box(this.x, this.y, this.width, this.height);
+
+  /// Convert from raw list [x, y, width, height]
+  factory Box.fromList(List<List<double>> coords) {
+    assert(coords.length >= 4, 'Box coordinates must have x, y, width, height');
+    return Box(coords[0][0], coords[0][1], coords[0][2], coords[0][3]);
+  }
+
+  /// Convert to Rect for Flutter drawing
+  Rect toRect() => Rect.fromLTWH(x, y, width, height);
+
+  @override
+  String toString() =>
+      'Box(x: $x, y: $y, width: $width, height: $height)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Box &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y &&
+          width == other.width &&
+          height == other.height;
+
+  @override
+  int get hashCode =>
+      x.hashCode ^ y.hashCode ^ width.hashCode ^ height.hashCode;
+}
+
 /// Result from text detection service.
 /// Contains detected text regions as polygons.
 class TextDetectionResult {
-  final List<Polygon> polygons;
+  final List<Box> boxes;
 
-  const TextDetectionResult(this.polygons);
+  const TextDetectionResult(this.boxes);
 
   /// Create from raw detection output (List<List<List<double>>>)
   factory TextDetectionResult.fromRawOutput(
-    List<List<List<double>>> rawPolygons,
+    List<Box> rawBoxes,
   ) {
-    final polygons = rawPolygons.map(Polygon.fromList).toList();
-    return TextDetectionResult(polygons);
+    final boxes = rawBoxes;
+    // process here
+    // connect boxes that are close to each other horizontally.
+    
+    return TextDetectionResult(boxes);
   }
 
   /// Number of detected regions
-  int get detectionCount => polygons.length;
+  int get detectionCount => boxes.length;
 
   /// Check if any detections were found
-  bool get hasDetections => polygons.isNotEmpty;
+  bool get hasDetections => boxes.isNotEmpty;
 
   @override
   String toString() => 'TextDetectionResult(detections: $detectionCount)';

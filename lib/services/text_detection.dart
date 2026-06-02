@@ -8,6 +8,8 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 
+import 'package:tflite_text_extraction/models/detection_result.dart';
+
 Map<String, dynamic> _preprocessImageForCraft(
   Uint8List imageBytes,
   int targetWidth,
@@ -802,8 +804,19 @@ class TextDetection {
     return _polygonsToAxisAlignedBoxes(polygons, originalWidth, originalHeight);
   }
 
-  Future<List<List<List<double>>>> detectPolygons(XFile imageFile) async {
+  Future<List<Box>> detectBoxes(XFile imageFile) async {
     final result = await _detectImpl(imageFile);
-    return result['polygons'] as List<List<List<double>>>;
+    final polygons = result['polygons'] as List<List<List<double>>>;
+    final originalWidth = result['originalWidth'] as int;
+    final originalHeight = result['originalHeight'] as int;
+    
+    final boxes = _polygonsToAxisAlignedBoxes(polygons, originalWidth, originalHeight);
+    return boxes.map((box) {
+      final x = box[0].toDouble();
+      final y = box[1].toDouble();
+      final width = (box[2] - box[0]).toDouble();
+      final height = (box[3] - box[1]).toDouble();
+      return Box(x, y, width, height);
+    }).toList();
   }
 }

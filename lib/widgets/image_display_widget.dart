@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../models/text_detection.dart';
+import '../models/detection_result.dart';
 
 /// A widget that displays an image with overlay boxes from text detection.
 ///
@@ -14,7 +14,7 @@ import '../models/text_detection.dart';
 class ImageDisplayWidget extends StatefulWidget {
   final ImageProvider imageProvider;
   final Size? sourceImageSize;
-  final List<Polygon> polygons;
+  final List<Box> boxes;
   final BoxDecoration? decoration;
   final BoxFit boxFit;
   final Alignment alignment;
@@ -23,7 +23,7 @@ class ImageDisplayWidget extends StatefulWidget {
     super.key,
     required this.imageProvider,
     this.sourceImageSize,
-    this.polygons = const [],
+    this.boxes = const [],
     this.decoration,
     this.boxFit = BoxFit.contain,
     this.alignment = Alignment.center,
@@ -33,12 +33,12 @@ factory ImageDisplayWidget.fromRawOutput({
   Uint8List? imageBytes,
   ImageProvider? imageProvider,
   Size? sourceImageSize,
-  List<List<List<double>>> rawPolygons = const [],
+  List<Box> rawBoxes = const [],
   BoxDecoration? decoration,
   BoxFit boxFit = BoxFit.contain,
   Alignment alignment = Alignment.center,
 }) {
-  final result = TextDetectionResult.fromRawOutput(rawPolygons);
+  final result = TextDetectionResult.fromRawOutput(rawBoxes);
 
   final provider = imageBytes != null
       ? MemoryImage(imageBytes)
@@ -52,7 +52,7 @@ factory ImageDisplayWidget.fromRawOutput({
   return ImageDisplayWidget(
     imageProvider: provider,
     sourceImageSize: resolvedSize,
-    polygons: result.polygons,
+    boxes: result.boxes,
     decoration: decoration,
     boxFit: boxFit,
     alignment: alignment,
@@ -144,7 +144,7 @@ class _ImageDisplayWidgetState extends State<ImageDisplayWidget> {
               if (_resolvedSize != null)
                 CustomPaint(
                   painter: _BoxOverlayPainter(
-                    polygons: widget.polygons,
+                    boxes: widget.boxes,
                     sourceImageSize: _resolvedSize!,
                     canvasSize: Size(constraints.maxWidth, constraints.maxHeight),
                   ),
@@ -158,12 +158,12 @@ class _ImageDisplayWidgetState extends State<ImageDisplayWidget> {
 }
 
 class _BoxOverlayPainter extends CustomPainter {
-  final List<Polygon> polygons;
+  final List<Box> boxes;
   final Size sourceImageSize;
   final Size canvasSize;
 
   _BoxOverlayPainter({
-    required this.polygons,
+    required this.boxes,
     required this.sourceImageSize,
     required this.canvasSize,
   });
@@ -188,10 +188,8 @@ class _BoxOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
-    for (final polygon in polygons) {
-      if (!polygon.isValid) continue;
-
-      final path = _polygonToPath(polygon, imageRect, sourceImageSize);
+    for (final box in boxes) {
+      final path = _boxToPath(box, imageRect, sourceImageSize);
 
       canvas.drawPath(path, shadowPaint);
       canvas.drawPath(path, highlightPaint);
@@ -200,17 +198,38 @@ class _BoxOverlayPainter extends CustomPainter {
     canvas.restore();
   }
 
-  Path _polygonToPath(
-    Polygon polygon,
+  Path _boxToPath(
+    Box box,
     Rect imageRect,
     Size imageSize,
   ) {
     final path = Path();
 
-    for (var i = 0; i < polygon.points.length; i++) {
-      final point = polygon.points[i];
-      final x = imageRect.left + (point.x / imageSize.width) * imageRect.width;
-      final y = imageRect.top + (point.y / imageSize.height) * imageRect.height;
+    for (var i = 0; i < 4; i++) {
+      double x, y;
+      switch (i) {
+        case 0:
+          x = box.x;
+          y = box.y;
+          break;
+        case 1:
+          x = box.x + box.width;
+          y = box.y;
+          break;
+        case 2:
+          x = box.x + box.width;
+          y = box.y + box.height;
+          break;
+        case 3:
+          x = box.x;
+          y = box.y + box.height;
+          break;
+        default:
+          x = box.x;
+          y = box.y;
+      }
+      x = imageRect.left + (x / imageSize.width) * imageRect.width;
+      y = imageRect.top + (y / imageSize.height) * imageRect.height;
 
       if (i == 0) {
         path.moveTo(x, y);
@@ -246,7 +265,7 @@ class _BoxOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BoxOverlayPainter oldDelegate) {
-    return oldDelegate.polygons != polygons ||
+    return oldDelegate.boxes != boxes ||
         oldDelegate.sourceImageSize != sourceImageSize ||
         oldDelegate.canvasSize != canvasSize;
   }
