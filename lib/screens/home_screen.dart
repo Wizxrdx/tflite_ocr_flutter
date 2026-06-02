@@ -167,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
       setState(() {
-        _boxes = rawBoxes;
+        _boxes = detectionResult.boxes;
       });
     } catch (error, stackTrace) {
       print('===== DETECTION ERROR START =====');

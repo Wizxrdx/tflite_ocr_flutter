@@ -97,15 +97,73 @@ class TextDetectionResult {
 
   const TextDetectionResult(this.boxes);
 
-  /// Create from raw detection output (List<List<List<double>>>)
   factory TextDetectionResult.fromRawOutput(
     List<Box> rawBoxes,
   ) {
-    final boxes = rawBoxes;
-    // process here
-    // connect boxes that are close to each other horizontally.
-    
-    return TextDetectionResult(boxes);
+    if (rawBoxes.isEmpty) {
+      return const TextDetectionResult([]);
+    }
+
+    // Median height (robust for receipts)
+    final heights = rawBoxes.map((b) => b.height).toList()..sort();
+    final medianHeight = heights[heights.length ~/ 2];
+
+    // Bucket into rows
+    final rows = <int, List<Box>>{};
+
+    for (final box in rawBoxes) {
+      final centerY = box.y + box.height * 0.5;
+      final row = (centerY / medianHeight).round();
+      (rows[row] ??= <Box>[]).add(box);
+    }
+
+    final mergedBoxes = <Box>[];
+
+    for (final rowBoxes in rows.values) {
+      if (rowBoxes.isEmpty) continue;
+
+      rowBoxes.sort((a, b) => a.x.compareTo(b.x));
+
+      // Start first group
+      double left = rowBoxes.first.x;
+      double top = rowBoxes.first.y;
+      double right = rowBoxes.first.x + rowBoxes.first.width;
+      double bottom = rowBoxes.first.y + rowBoxes.first.height;
+
+      for (var i = 1; i < rowBoxes.length; i++) {
+        final next = rowBoxes[i];
+
+        final nextLeft = next.x;
+        final nextRight = next.x + next.width;
+        final nextTop = next.y;
+        final nextBottom = next.y + next.height;
+
+        final gap = nextLeft - right;
+
+        final maxGap = (bottom - top) * 0.8 * 3; // your aggressive merge factor
+
+        if (gap <= maxGap) {
+          // merge horizontally + expand vertically fully
+          left = left < nextLeft ? left : nextLeft;
+          right = right > nextRight ? right : nextRight;
+
+          top = top < nextTop ? top : nextTop;
+          bottom = bottom > nextBottom ? bottom : nextBottom;
+        } else {
+          mergedBoxes.add(Box(left, top, right - left, bottom - top));
+
+          left = nextLeft;
+          top = nextTop;
+          right = nextRight;
+          bottom = nextBottom;
+        }
+      }
+
+      // flush last group
+      mergedBoxes.add(Box(left, top, right - left, bottom - top));
+    }
+
+    return TextDetectionResult(mergedBoxes);
   }
 
   /// Number of detected regions
