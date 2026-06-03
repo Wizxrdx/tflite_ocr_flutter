@@ -796,14 +796,6 @@ class TextDetection {
     };
   }
 
-  Future<List<List<int>>> detect(XFile imageFile) async {
-    final result = await _detectImpl(imageFile);
-    final polygons = result['polygons'] as List<List<List<double>>>;
-    final originalWidth = result['originalWidth'] as int;
-    final originalHeight = result['originalHeight'] as int;
-    return _polygonsToAxisAlignedBoxes(polygons, originalWidth, originalHeight);
-  }
-
   Future<List<Box>> detectBoxes(XFile imageFile) async {
     final result = await _detectImpl(imageFile);
     final polygons = result['polygons'] as List<List<List<double>>>;

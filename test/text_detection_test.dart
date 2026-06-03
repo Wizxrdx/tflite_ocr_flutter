@@ -17,7 +17,7 @@ void main() {
     final helper = TextDetection();
     await helper.init();
 
-    final boxes = await helper.detect(XFile(inputPath));
+    final boxes = await helper.detectBoxes(XFile(inputPath));
 
     expect(boxes, isNotEmpty);
 

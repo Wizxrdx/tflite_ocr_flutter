@@ -126,3 +126,4 @@ android/app/.cxx/
 android/app/build/
 build/
 .gradle/
+temp/
