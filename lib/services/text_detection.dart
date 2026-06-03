@@ -8,7 +8,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 
-import 'package:tflite_text_extraction/models/detection_result.dart';
+import 'package:tflite_text_extraction/models/result.dart';
 
 Map<String, dynamic> _preprocessImageForCraft(
   Uint8List imageBytes,
@@ -796,7 +796,7 @@ class TextDetection {
     };
   }
 
-  Future<List<Box>> detectBoxes(XFile imageFile) async {
+  Future<List<LabeledBox>> detectBoxes(XFile imageFile) async {
     final result = await _detectImpl(imageFile);
     final polygons = result['polygons'] as List<List<List<double>>>;
     final originalWidth = result['originalWidth'] as int;
@@ -808,7 +808,7 @@ class TextDetection {
       final y = box[1];
       final width = box[2] - box[0];
       final height = box[3] - box[1];
-      return Box(x, y, width, height);
+      return LabeledBox(x, y, width, height);
     }).toList();
   }
 }

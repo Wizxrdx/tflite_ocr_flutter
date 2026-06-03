@@ -31,42 +31,19 @@ class Point {
   int get hashCode => x.hashCode ^ y.hashCode;
 }
 
-/// A polygon defined by a list of points (vertices).
-/// Typically represents a detected text region with arbitrary shape.
-class Polygon {
-  final List<Point> points;
-
-  const Polygon(this.points);
-
-  /// Create from raw list of [x, y] coordinate pairs
-  factory Polygon.fromList(List<List<double>> coords) {
-    final points = coords.map(Point.fromList).toList();
-    return Polygon(points);
-  }
-
-  /// Number of vertices in the polygon
-  int get pointCount => points.length;
-
-  /// Check if polygon has enough points to be valid
-  bool get isValid => pointCount >= 3;
-
-  @override
-  String toString() => 'Polygon(points: $pointCount)';
-}
-
-class Box {
+class LabeledBox {
   final int x;
   final int y;
   final int width;
   final int height;
   final String label;
 
-  const Box(this.x, this.y, this.width, this.height, [this.label = '']);
+  const LabeledBox(this.x, this.y, this.width, this.height, [this.label = '']);
 
   /// Convert from raw list [x, y, width, height]
-  factory Box.fromList(List<List<double>> coords) {
+  factory LabeledBox.fromList(List<List<double>> coords) {
     assert(coords.length >= 4, 'Box coordinates must have x, y, width, height');
-    return Box(
+    return LabeledBox(
       coords[0][0].round(),
       coords[0][1].round(),
       coords[0][2].round(),
@@ -90,7 +67,7 @@ class Box {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Box &&
+      other is LabeledBox &&
           runtimeType == other.runtimeType &&
           x == other.x &&
           y == other.y &&
@@ -105,12 +82,12 @@ class Box {
 
 /// Contains a list of detected text boxes with labels.
 class OCRResult {
-  final List<Box> boxes;
+  final List<LabeledBox> boxes;
 
   const OCRResult(this.boxes);
 
   factory OCRResult.fromRawOutput(
-    List<Box> rawBoxes,
+    List<LabeledBox> rawBoxes,
   ) {
     if (rawBoxes.isEmpty) {
       return const OCRResult([]);
@@ -121,15 +98,15 @@ class OCRResult {
     final medianHeight = heights[heights.length ~/ 2];
 
     // Bucket into rows
-    final rows = <int, List<Box>>{};
+    final rows = <int, List<LabeledBox>>{};
 
     for (final box in rawBoxes) {
       final centerY = box.y + box.height * 0.5;
       final row = (centerY / medianHeight).round();
-      (rows[row] ??= <Box>[]).add(box);
+      (rows[row] ??= <LabeledBox>[]).add(box);
     }
 
-    final mergedBoxes = <Box>[];
+    final mergedBoxes = <LabeledBox>[];
 
     for (final rowBoxes in rows.values) {
       if (rowBoxes.isEmpty) continue;
@@ -162,7 +139,7 @@ class OCRResult {
           top = top < nextTop ? top : nextTop;
           bottom = bottom > nextBottom ? bottom : nextBottom;
         } else {
-          mergedBoxes.add(Box(left, top, right - left, bottom - top));
+          mergedBoxes.add(LabeledBox(left, top, right - left, bottom - top));
 
           left = nextLeft;
           top = nextTop;
@@ -172,7 +149,7 @@ class OCRResult {
       }
 
       // flush last group
-      mergedBoxes.add(Box(left, top, right - left, bottom - top));
+      mergedBoxes.add(LabeledBox(left, top, right - left, bottom - top));
     }
 
     return OCRResult(mergedBoxes);

@@ -5,7 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 
-import 'package:tflite_text_extraction/models/detection_result.dart';
+import 'package:tflite_text_extraction/models/result.dart';
 
 img.Image resizeLinearOpenCv(
     img.Image source, int targetWidth, int targetHeight) {
@@ -123,7 +123,7 @@ img.Image resizeLinearOpenCv(
 }
 
 Future<Uint8List> drawBoxesOnImage(
-    XFile imageFile, List<Box> boxes) async {
+    XFile imageFile, List<LabeledBox> boxes) async {
   final Uint8List uint8List = await imageFile.readAsBytes();
   return Isolate.run(() => _drawBoxesOnImageBytes(uint8List, boxes));
 }
@@ -134,7 +134,7 @@ Future<Uint8List> drawPolygonsOnImage(
   return Isolate.run(() => _drawPolygonsOnImageBytes(uint8List, polygons));
 }
 
-Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<Box> boxes) {
+Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<LabeledBox> boxes) {
   final img.Image sourceImage = img.decodeImage(imageBytes)!;
   final shadowColor = img.ColorRgba8(0, 0, 0, 200);
   final highlightColor = img.ColorRgba8(0, 255, 0, 255);
@@ -219,7 +219,7 @@ Uint8List _drawPolygonsOnImageBytes(
 }
 
 Future<List<Uint8List>> extractImagesInsideBoundingBoxes(
-    XFile imageFile, List<Box> boxes) async {
+    XFile imageFile, List<LabeledBox> boxes) async {
   final Uint8List uint8List = await imageFile.readAsBytes();
   final img.Image sourceImage = img.decodeImage(uint8List)!;
   final extractedImages = <Uint8List>[];

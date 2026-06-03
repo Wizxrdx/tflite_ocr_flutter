@@ -4,11 +4,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../models/detection_result.dart';
+import '../models/result.dart';
 
 /// A widget that displays an image with overlay boxes from text detection.
 ///
-/// Accepts [ImageProvider], and a list of [Box] objects
+/// Accepts [ImageProvider], and a list of [LabeledBox] objects
 /// containing detected text regions.
 /// The polygons are overlaid on the image with proper coordinate scaling.
 class ImageDisplayWidget extends StatefulWidget {
@@ -156,7 +156,7 @@ class _ImageDisplayWidgetState extends State<ImageDisplayWidget> {
 }
 
 class _BoxOverlayPainter extends CustomPainter {
-  final List<Box> boxes;
+  final List<LabeledBox> boxes;
   final Size sourceImageSize;
   final Size canvasSize;
 
@@ -197,7 +197,7 @@ class _BoxOverlayPainter extends CustomPainter {
   }
 
   Path _boxToPath(
-    Box box,
+    LabeledBox box,
     Rect imageRect,
     Size imageSize,
   ) {

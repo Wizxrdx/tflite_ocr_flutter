@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tflite_text_extraction/helpers/image_processing.dart';
-import 'package:tflite_text_extraction/models/detection_result.dart';
+import 'package:tflite_text_extraction/models/result.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
 
 void main() {
