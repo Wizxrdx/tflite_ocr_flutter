@@ -171,6 +171,7 @@ class TextDetection {
       throw StateError('Expected 4D input tensor [N,C,H,W], got: $inputShape');
     }
 
+    print('Model input shape: $inputShape');
     final expectedChannels = inputShape[1];
 
     if (expectedChannels != 3) {
