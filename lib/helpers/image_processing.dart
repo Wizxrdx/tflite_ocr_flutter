@@ -5,6 +5,8 @@ import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 
+import 'package:tflite_text_extraction/models/detection_result.dart';
+
 img.Image resizeLinearOpenCv(
     img.Image source, int targetWidth, int targetHeight) {
   if (source.width == targetWidth && source.height == targetHeight) {
@@ -121,7 +123,7 @@ img.Image resizeLinearOpenCv(
 }
 
 Future<Uint8List> drawBoxesOnImage(
-    XFile imageFile, List<List<int>> boxes) async {
+    XFile imageFile, List<Box> boxes) async {
   final Uint8List uint8List = await imageFile.readAsBytes();
   return Isolate.run(() => _drawBoxesOnImageBytes(uint8List, boxes));
 }
@@ -132,16 +134,16 @@ Future<Uint8List> drawPolygonsOnImage(
   return Isolate.run(() => _drawPolygonsOnImageBytes(uint8List, polygons));
 }
 
-Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<List<int>> boxes) {
+Uint8List _drawBoxesOnImageBytes(Uint8List imageBytes, List<Box> boxes) {
   final img.Image sourceImage = img.decodeImage(imageBytes)!;
   final shadowColor = img.ColorRgba8(0, 0, 0, 200);
   final highlightColor = img.ColorRgba8(0, 255, 0, 255);
 
   for (final box in boxes) {
-    final x1 = min(max(box[0], 0), sourceImage.width - 1);
-    final y1 = min(max(box[1], 0), sourceImage.height - 1);
-    final x2 = min(max(box[2], 0), sourceImage.width - 1);
-    final y2 = min(max(box[3], 0), sourceImage.height - 1);
+    final x1 = min(max(box.x, 0), sourceImage.width - 1);
+    final y1 = min(max(box.y, 0), sourceImage.height - 1);
+    final x2 = min(max(box.x + box.width, 0), sourceImage.width - 1);
+    final y2 = min(max(box.y + box.height, 0), sourceImage.height - 1);
 
     if (x2 <= x1 || y2 <= y1) {
       continue;
@@ -217,16 +219,16 @@ Uint8List _drawPolygonsOnImageBytes(
 }
 
 Future<List<Uint8List>> extractImagesInsideBoundingBoxes(
-    XFile imageFile, List<List<int>> boxes) async {
+    XFile imageFile, List<Box> boxes) async {
   final Uint8List uint8List = await imageFile.readAsBytes();
   final img.Image sourceImage = img.decodeImage(uint8List)!;
   final extractedImages = <Uint8List>[];
 
   for (final box in boxes) {
-    final x1 = min(max(box[0], 0), sourceImage.width - 1);
-    final y1 = min(max(box[1], 0), sourceImage.height - 1);
-    final x2 = min(max(box[2], 0), sourceImage.width);
-    final y2 = min(max(box[3], 0), sourceImage.height);
+    final x1 = min(max(box.x, 0), sourceImage.width - 1);
+    final y1 = min(max(box.y, 0), sourceImage.height - 1);
+    final x2 = min(max(box.x + box.width, 0), sourceImage.width - 1);
+    final y2 = min(max(box.y + box.height, 0), sourceImage.height - 1);
 
     if (x2 <= x1 || y2 <= y1) {
       continue;

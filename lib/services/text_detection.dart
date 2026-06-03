@@ -812,10 +812,10 @@ class TextDetection {
     
     final boxes = _polygonsToAxisAlignedBoxes(polygons, originalWidth, originalHeight);
     return boxes.map((box) {
-      final x = box[0].toDouble();
-      final y = box[1].toDouble();
-      final width = (box[2] - box[0]).toDouble();
-      final height = (box[3] - box[1]).toDouble();
+      final x = box[0];
+      final y = box[1];
+      final width = box[2] - box[0];
+      final height = box[3] - box[1];
       return Box(x, y, width, height);
     }).toList();
   }

@@ -206,7 +206,7 @@ class _BoxOverlayPainter extends CustomPainter {
     final path = Path();
 
     for (var i = 0; i < 4; i++) {
-      double x, y;
+      int x, y;
       switch (i) {
         case 0:
           x = box.x;
@@ -228,13 +228,13 @@ class _BoxOverlayPainter extends CustomPainter {
           x = box.x;
           y = box.y;
       }
-      x = imageRect.left + (x / imageSize.width) * imageRect.width;
-      y = imageRect.top + (y / imageSize.height) * imageRect.height;
+      x = (imageRect.left + (x / imageSize.width) * imageRect.width).round();
+      y = (imageRect.top + (y / imageSize.height) * imageRect.height).round();
 
       if (i == 0) {
-        path.moveTo(x, y);
+        path.moveTo(x.toDouble(), y.toDouble());
       } else {
-        path.lineTo(x, y);
+        path.lineTo(x.toDouble(), y.toDouble());
       }
     }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:tflite_text_extraction/helpers/image_processing.dart';
 import 'package:tflite_text_extraction/models/detection_result.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
 import 'package:tflite_text_extraction/widgets/camera_button.dart';
@@ -163,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await _imageHelperInit;
       final rawBoxes = await _textDetection.detectBoxes(imageFile);
       final detectionResult = TextDetectionResult.fromRawOutput(rawBoxes);
-      // final outputFile = await drawBoxesOnImage(imageFile, boxes);
+      final outputImageBytes = await extractImagesInsideBoundingBoxes(imageFile, detectionResult.boxes);
 
       if (!mounted) return;
       setState(() {

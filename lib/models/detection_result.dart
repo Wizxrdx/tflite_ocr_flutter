@@ -55,21 +55,31 @@ class Polygon {
 }
 
 class Box {
-  final double x;
-  final double y;
-  final double width;
-  final double height;
+  final int x;
+  final int y;
+  final int width;
+  final int height;
 
   const Box(this.x, this.y, this.width, this.height);
 
   /// Convert from raw list [x, y, width, height]
   factory Box.fromList(List<List<double>> coords) {
     assert(coords.length >= 4, 'Box coordinates must have x, y, width, height');
-    return Box(coords[0][0], coords[0][1], coords[0][2], coords[0][3]);
+    return Box(
+      coords[0][0].round(),
+      coords[0][1].round(),
+      coords[0][2].round(),
+      coords[0][3].round(),
+    );
   }
 
   /// Convert to Rect for Flutter drawing
-  Rect toRect() => Rect.fromLTWH(x, y, width, height);
+  Rect toRect() => Rect.fromLTWH(
+    x.toDouble(),
+    y.toDouble(),
+    width.toDouble(),
+    height.toDouble()
+  );
 
   @override
   String toString() =>
@@ -125,10 +135,10 @@ class TextDetectionResult {
       rowBoxes.sort((a, b) => a.x.compareTo(b.x));
 
       // Start first group
-      double left = rowBoxes.first.x;
-      double top = rowBoxes.first.y;
-      double right = rowBoxes.first.x + rowBoxes.first.width;
-      double bottom = rowBoxes.first.y + rowBoxes.first.height;
+      int left = rowBoxes.first.x;
+      int top = rowBoxes.first.y;
+      int right = rowBoxes.first.x + rowBoxes.first.width;
+      int bottom = rowBoxes.first.y + rowBoxes.first.height;
 
       for (var i = 1; i < rowBoxes.length; i++) {
         final next = rowBoxes[i];
