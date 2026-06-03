@@ -28,7 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
   late Uint8List? _imageBytes;
   late ImageProvider? _imageProvider;
   late TextDetection _textDetection;
-  late Future<void> _imageHelperInit;
   late List<Box> _boxes;
   bool _isDetecting = false;
   
@@ -38,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();    
 
     _textDetection = TextDetection();
-    _imageHelperInit = _textDetection.init();
+    _textDetection.init();
     _imageBytes = null;
     _imageProvider = const AssetImage('assets/wizardiusbewebicon.png');
     _boxes = [];
@@ -161,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      await _imageHelperInit;
       final rawBoxes = await _textDetection.detectBoxes(imageFile);
       final detectionResult = TextDetectionResult.fromRawOutput(rawBoxes);
       final outputImageBytes = await extractImagesInsideBoundingBoxes(imageFile, detectionResult.boxes);
