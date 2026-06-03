@@ -8,7 +8,7 @@ import '../models/detection_result.dart';
 
 /// A widget that displays an image with overlay boxes from text detection.
 ///
-/// Accepts [imageProvider], and a list of [polygons]
+/// Accepts [ImageProvider], and a list of [Box] objects
 /// containing detected text regions.
 /// The polygons are overlaid on the image with proper coordinate scaling.
 class ImageDisplayWidget extends StatefulWidget {
