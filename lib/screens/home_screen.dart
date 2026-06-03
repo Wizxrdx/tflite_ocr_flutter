@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import 'package:tflite_text_extraction/helpers/image_processing.dart';
 import 'package:tflite_text_extraction/models/detection_result.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
+import 'package:tflite_text_extraction/services/text_recognition.dart';
 import 'package:tflite_text_extraction/widgets/camera_button.dart';
 import 'package:tflite_text_extraction/widgets/image_display_widget.dart' show ImageDisplayWidget;
 import 'package:tflite_text_extraction/widgets/image_picker_button.dart';
@@ -28,7 +28,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late Uint8List? _imageBytes;
   late ImageProvider? _imageProvider;
   late TextDetection _textDetection;
-  late List<Box> _boxes;
+  late TextRecognition _textRecognition;
+  late OCRResult _boxes;
   bool _isDetecting = false;
   
 
@@ -38,9 +39,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _textDetection = TextDetection();
     _textDetection.init();
+    _textRecognition = TextRecognition();
+    _textRecognition.init();
+
     _imageBytes = null;
     _imageProvider = const AssetImage('assets/wizardiusbewebicon.png');
-    _boxes = [];
+    _boxes = const OCRResult([]);
   }
 
   @override
@@ -86,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ImageDisplayWidget.fromRawOutput(
                         imageBytes: _imageBytes,
                         imageProvider: _imageProvider,
-                        rawBoxes: _boxes,
+                        result: _boxes,
                         boxFit: BoxFit.contain,
                         alignment: Alignment.center,
                       ),
@@ -156,17 +160,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _imageProvider = null;
       _imageBytes = imageBytes;
-      _boxes = [];
+      _boxes = const OCRResult([]);
     });
 
     try {
       final rawBoxes = await _textDetection.detectBoxes(imageFile);
-      final detectionResult = TextDetectionResult.fromRawOutput(rawBoxes);
-      final outputImageBytes = await extractImagesInsideBoundingBoxes(imageFile, detectionResult.boxes);
+      final detectionResult = OCRResult.fromRawOutput(rawBoxes);
+      await _textRecognition.detectText(detectionResult);
 
       if (!mounted) return;
       setState(() {
-        _boxes = detectionResult.boxes;
+        _boxes = detectionResult;
       });
     } catch (error, stackTrace) {
       print('===== DETECTION ERROR START =====');

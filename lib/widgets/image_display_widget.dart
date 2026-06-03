@@ -14,7 +14,7 @@ import '../models/detection_result.dart';
 class ImageDisplayWidget extends StatefulWidget {
   final ImageProvider imageProvider;
   final Size? sourceImageSize;
-  final List<Box> boxes;
+  final OCRResult result;
   final BoxDecoration? decoration;
   final BoxFit boxFit;
   final Alignment alignment;
@@ -23,23 +23,21 @@ class ImageDisplayWidget extends StatefulWidget {
     super.key,
     required this.imageProvider,
     this.sourceImageSize,
-    this.boxes = const [],
+    this.result = const OCRResult([]),
     this.decoration,
     this.boxFit = BoxFit.contain,
     this.alignment = Alignment.center,
   });
 
 factory ImageDisplayWidget.fromRawOutput({
+  required OCRResult result,
   Uint8List? imageBytes,
   ImageProvider? imageProvider,
   Size? sourceImageSize,
-  List<Box> rawBoxes = const [],
   BoxDecoration? decoration,
   BoxFit boxFit = BoxFit.contain,
   Alignment alignment = Alignment.center,
 }) {
-  final result = TextDetectionResult.fromRawOutput(rawBoxes);
-
   final provider = imageBytes != null
       ? MemoryImage(imageBytes)
       : (imageProvider ?? const AssetImage('assets/wizardiusbewebicon.png'));
@@ -52,7 +50,7 @@ factory ImageDisplayWidget.fromRawOutput({
   return ImageDisplayWidget(
     imageProvider: provider,
     sourceImageSize: resolvedSize,
-    boxes: result.boxes,
+    result: result,
     decoration: decoration,
     boxFit: boxFit,
     alignment: alignment,
@@ -144,7 +142,7 @@ class _ImageDisplayWidgetState extends State<ImageDisplayWidget> {
               if (_resolvedSize != null)
                 CustomPaint(
                   painter: _BoxOverlayPainter(
-                    boxes: widget.boxes,
+                    boxes: widget.result.boxes,
                     sourceImageSize: _resolvedSize!,
                     canvasSize: Size(constraints.maxWidth, constraints.maxHeight),
                   ),

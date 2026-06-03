@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tflite_text_extraction/helpers/image_processing.dart';
+import 'package:tflite_text_extraction/models/detection_result.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
 
 void main() {
@@ -17,16 +18,17 @@ void main() {
     final helper = TextDetection();
     await helper.init();
 
-    final boxes = await helper.detectBoxes(XFile(inputPath));
+    final rawBoxes = await helper.detectBoxes(XFile(inputPath));
+    final detectionResult = OCRResult.fromRawOutput(rawBoxes);
 
-    expect(boxes, isNotEmpty);
+    expect(detectionResult.boxes, isNotEmpty);
 
     final croppedImages =
-        await extractImagesInsideBoundingBoxes(XFile(inputPath), boxes);
+        await extractImagesInsideBoundingBoxes(XFile(inputPath), detectionResult.boxes);
 
     expect(croppedImages, isNotEmpty);
 
-    final outputBytes = await drawBoxesOnImage(XFile(inputPath), boxes);
+    final outputBytes = await drawBoxesOnImage(XFile(inputPath), detectionResult.boxes);
 
     final tempDirectory = Directory(
       '${Directory.current.path}${Platform.pathSeparator}temp',
@@ -41,5 +43,15 @@ void main() {
     expect(await outputFile.exists(), isTrue);
     expect(await outputFile.length(), greaterThan(0));
     print('Saved detected image to ${outputFile.path}');
+
+    for (var i = 0; i < croppedImages.length; i++) {
+      final croppedFile = File(
+        '${tempDirectory.path}${Platform.pathSeparator}cropped_${DateTime.now().microsecondsSinceEpoch}_$i.jpg',
+      );
+      await croppedFile.writeAsBytes(croppedImages[i], flush: true);
+      expect(await croppedFile.exists(), isTrue);
+      expect(await croppedFile.length(), greaterThan(0));
+      print('Saved cropped image to ${croppedFile.path}');
+    }
   });
 }

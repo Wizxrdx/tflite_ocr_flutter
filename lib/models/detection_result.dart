@@ -59,8 +59,9 @@ class Box {
   final int y;
   final int width;
   final int height;
+  final String label;
 
-  const Box(this.x, this.y, this.width, this.height);
+  const Box(this.x, this.y, this.width, this.height, [this.label = '']);
 
   /// Convert from raw list [x, y, width, height]
   factory Box.fromList(List<List<double>> coords) {
@@ -70,6 +71,7 @@ class Box {
       coords[0][1].round(),
       coords[0][2].round(),
       coords[0][3].round(),
+      '',
     );
   }
 
@@ -83,7 +85,7 @@ class Box {
 
   @override
   String toString() =>
-      'Box(x: $x, y: $y, width: $width, height: $height)';
+      'Box(x: $x, y: $y, width: $width, height: $height, label: $label)';
 
   @override
   bool operator ==(Object other) =>
@@ -93,25 +95,25 @@ class Box {
           x == other.x &&
           y == other.y &&
           width == other.width &&
-          height == other.height;
+          height == other.height &&
+          label == other.label;
 
   @override
   int get hashCode =>
-      x.hashCode ^ y.hashCode ^ width.hashCode ^ height.hashCode;
+      x.hashCode ^ y.hashCode ^ width.hashCode ^ height.hashCode ^ label.hashCode;
 }
 
-/// Result from text detection service.
-/// Contains detected text regions as polygons.
-class TextDetectionResult {
+/// Contains a list of detected text boxes with labels.
+class OCRResult {
   final List<Box> boxes;
 
-  const TextDetectionResult(this.boxes);
+  const OCRResult(this.boxes);
 
-  factory TextDetectionResult.fromRawOutput(
+  factory OCRResult.fromRawOutput(
     List<Box> rawBoxes,
   ) {
     if (rawBoxes.isEmpty) {
-      return const TextDetectionResult([]);
+      return const OCRResult([]);
     }
 
     // Median height (robust for receipts)
@@ -173,7 +175,7 @@ class TextDetectionResult {
       mergedBoxes.add(Box(left, top, right - left, bottom - top));
     }
 
-    return TextDetectionResult(mergedBoxes);
+    return OCRResult(mergedBoxes);
   }
 
   /// Number of detected regions
@@ -183,5 +185,5 @@ class TextDetectionResult {
   bool get hasDetections => boxes.isNotEmpty;
 
   @override
-  String toString() => 'TextDetectionResult(detections: $detectionCount)';
+  String toString() => 'OCRResult(detections: $detectionCount)';
 }
