@@ -15,10 +15,10 @@ void main() {
     expect(File(inputPath).existsSync(), isTrue,
         reason: 'Expected test image at $inputPath');
 
-    final helper = TextDetection();
-    await helper.init();
+    final detectionModel = TextDetection();
+    await detectionModel.init();
 
-    final rawBoxes = await helper.detectBoxes(XFile(inputPath));
+    final rawBoxes = await detectionModel.detectBoxes(XFile(inputPath));
     final detectionResult = OCRResult.fromRawOutput(rawBoxes);
 
     expect(detectionResult.boxes, isNotEmpty);
