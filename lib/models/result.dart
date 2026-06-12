@@ -1,4 +1,8 @@
+import 'dart:math';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 
 /// A single point in 2D space with x and y coordinates.
 class Point {
@@ -36,9 +40,9 @@ class LabeledBox {
   final int y;
   final int width;
   final int height;
-  final String label;
+  String label = '';
 
-  const LabeledBox(this.x, this.y, this.width, this.height, [this.label = '']);
+  LabeledBox(this.x, this.y, this.width, this.height);
 
   /// Convert from raw list [x, y, width, height]
   factory LabeledBox.fromList(List<List<double>> coords) {
@@ -48,7 +52,6 @@ class LabeledBox {
       coords[0][1].round(),
       coords[0][2].round(),
       coords[0][3].round(),
-      '',
     );
   }
 
@@ -78,6 +81,29 @@ class LabeledBox {
   @override
   int get hashCode =>
       x.hashCode ^ y.hashCode ^ width.hashCode ^ height.hashCode ^ label.hashCode;
+
+  Uint8List extractImage(Uint8List sourceImageBytes) {
+    final img.Image sourceImage = img.decodeImage(sourceImageBytes)!;
+
+    final x1 = min(max(x, 0), sourceImage.width - 1);
+    final y1 = min(max(y, 0), sourceImage.height - 1);
+    final x2 = min(max(x + width, 0), sourceImage.width - 1);
+    final y2 = min(max(y + height, 0), sourceImage.height - 1);
+
+    if (x2 <= x1 || y2 <= y1) {
+      // Invalid box, return empty image
+      return Uint8List(0);
+    }
+
+    final crop = img.copyCrop(
+      sourceImage,
+      x: x1,
+      y: y1,
+      width: x2 - x1,
+      height: y2 - y1,
+    );
+    return Uint8List.fromList(img.encodeJpg(crop));
+  }
 }
 
 /// Contains a list of detected text boxes with labels.

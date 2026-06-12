@@ -166,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final rawBoxes = await _textDetection.detectBoxes(imageFile);
       final detectionResult = OCRResult.fromRawOutput(rawBoxes);
-      await _textRecognition.detectText(imageBytes, detectionResult);
+      await _textRecognition.recognizeText(imageBytes, detectionResult);
 
       if (!mounted) return;
       setState(() {

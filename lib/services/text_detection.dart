@@ -35,25 +35,19 @@ Map<String, dynamic> _preprocessImageForCraft(
 
   final height = resizedImage.height;
   final width = resizedImage.width;
-  final channels = List.generate(
-    3,
-    (_) => List.generate(
-      height,
-      (_) => List<double>.filled(width, 0.0),
-    ),
-  );
+  final textmap = Float32List(height * width * 3);
 
   for (var y = 0; y < height; y++) {
     for (var x = 0; x < width; x++) {
       final pixel = resizedImage.getPixel(x, y);
-      channels[0][y][x] = (pixel.r - meanR) / stdR;
-      channels[1][y][x] = (pixel.g - meanG) / stdG;
-      channels[2][y][x] = (pixel.b - meanB) / stdB;
+      textmap[0 * width + y * width + x] = (pixel.r - meanR) / stdR;
+      textmap[1 * width + y * width + x] = (pixel.g - meanG) / stdG;
+      textmap[2 * width + y * width + x] = (pixel.b - meanB) / stdB;
     }
   }
 
   return {
-    'inputTensor': [channels],
+    'inputTensor': [textmap],
     'resizedWidth': width,
     'resizedHeight': height,
     'originalWidth': originalWidth,

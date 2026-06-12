@@ -2,7 +2,7 @@ name: tflite_text_extraction
 description: A new Flutter project.
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: '>=3.1.1 <4.0.0'
@@ -29,4 +29,5 @@ flutter:
 
   assets:
     - assets/craft-text-detector-fp16.tflite
+    - assets/crnn_kurapan_fused.tflite
     - assets/wizardiusbewebicon.png
