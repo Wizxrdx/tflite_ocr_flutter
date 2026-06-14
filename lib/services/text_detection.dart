@@ -1,149 +1,27 @@
+import 'dart:typed_data';
 import 'dart:math';
-import 'dart:isolate';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:image/image.dart' as img;
+
 import 'package:tflite_text_extraction/helpers/image_processing.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:image/image.dart' as img;
-import 'dart:typed_data';
-
 import 'package:tflite_text_extraction/models/result.dart';
-
-Map<String, dynamic> _preprocessImageForCraft(
-  Uint8List imageBytes,
-  int targetWidth,
-  int targetHeight,
-) {
-  final decodedImage = img.decodeImage(imageBytes);
-  if (decodedImage == null) {
-    throw StateError('Failed to decode input image.');
-  }
-
-  final originalWidth = decodedImage.width;
-  final originalHeight = decodedImage.height;
-
-  final resizedImage =
-      resizeLinearOpenCv(decodedImage, targetWidth, targetHeight);
-
-  const meanR = 123.675; // 0.485 * 255
-  const meanG = 116.28; // 0.456 * 255
-  const meanB = 103.53; // 0.406 * 255
-  const stdR = 58.395; // 0.229 * 255
-  const stdG = 57.12; // 0.224 * 255
-  const stdB = 57.375; // 0.225 * 255
-
-  final height = resizedImage.height;
-  final width = resizedImage.width;
-  final textmap = Float32List(height * width * 3);
-
-  for (var y = 0; y < height; y++) {
-    for (var x = 0; x < width; x++) {
-      final pixel = resizedImage.getPixel(x, y);
-      textmap[0 * width + y * width + x] = (pixel.r - meanR) / stdR;
-      textmap[1 * width + y * width + x] = (pixel.g - meanG) / stdG;
-      textmap[2 * width + y * width + x] = (pixel.b - meanB) / stdB;
-    }
-  }
-
-  return {
-    'inputTensor': [textmap],
-    'resizedWidth': width,
-    'resizedHeight': height,
-    'originalWidth': originalWidth,
-    'originalHeight': originalHeight,
-  };
-}
-
-List _create4DTensorBufferForShape(List<int> shape) {
-  return List.generate(
-    shape[0],
-    (_) => List.generate(
-      shape[1],
-      (_) => List.generate(
-        shape[2],
-        (_) => List<double>.filled(shape[3], 0.0),
-      ),
-    ),
-  );
-}
-
-Map<String, dynamic> _runCraftPreprocessAndInference(
-  Uint8List imageBytes,
-  int interpreterAddress,
-  int targetWidth,
-  int targetHeight,
-) {
-  final preprocessTimer = Stopwatch()..start();
-  final preprocessed =
-      _preprocessImageForCraft(imageBytes, targetWidth, targetHeight);
-  preprocessTimer.stop();
-
-  final inputTensor = preprocessed['inputTensor'] as List;
-  final interpreter = Interpreter.fromAddress(interpreterAddress);
-  final outputTensors = interpreter.getOutputTensors();
-
-  List<int>? rawScoreShape;
-  var scoreTensorIndex = -1;
-  for (var i = 0; i < outputTensors.length; i++) {
-    final shape = outputTensors[i].shape;
-    if (shape.length != 4) {
-      throw StateError(
-          'Expected 4D output tensor for CRAFT, got shape: $shape');
-    }
-
-    if (scoreTensorIndex < 0 && (shape[3] == 2 || shape[1] == 2)) {
-      scoreTensorIndex = i;
-      rawScoreShape = shape;
-    }
-  }
-
-  if (scoreTensorIndex < 0 || rawScoreShape == null) {
-    final shapes = outputTensors.map((t) => t.shape.toString()).toList();
-    throw StateError(
-        'Could not find CRAFT score map with 2 channels. Outputs: $shapes');
-  }
-
-  final inferenceTimer = Stopwatch()..start();
-  interpreter.runInference([inputTensor]);
-  inferenceTimer.stop();
-
-  final rawScoreMap = _create4DTensorBufferForShape(rawScoreShape);
-  outputTensors[scoreTensorIndex].copyTo(rawScoreMap);
-
-  return {
-    'rawScoreMap': rawScoreMap,
-    'rawScoreShape': rawScoreShape,
-    'resizedWidth': preprocessed['resizedWidth'],
-    'resizedHeight': preprocessed['resizedHeight'],
-    'originalWidth': preprocessed['originalWidth'],
-    'originalHeight': preprocessed['originalHeight'],
-    'preprocessMs': preprocessTimer.elapsedMicroseconds / 1000.0,
-    'inferenceMs': inferenceTimer.elapsedMicroseconds / 1000.0,
-  };
-}
 
 class TextDetection {
   static const _modelPath = "assets/craft-text-detector-fp16.tflite";
   late Interpreter _interpreter;
   late Tensor _inputTensor;
-  IsolateInterpreter? _isolateInterpreter;
   bool _isInitialized = false;
 
   Future<void> init() async {
-    await _loadModel();
-  }
-
-  Future<void> _loadModel() async {
     final options = InterpreterOptions()
-      ..threads = max(1, min(4, Platform.numberOfProcessors));
+    ..threads = max(1, min(4, Platform.numberOfProcessors));
+
     // Load model from assets
     _interpreter = await Interpreter.fromAsset(_modelPath, options: options);
     _inputTensor = _interpreter.getInputTensors().first;
-    _isolateInterpreter = await IsolateInterpreter.create(
-      address: _interpreter.address,
-      debugName: 'TextDetectionIsolate',
-    );
     _isInitialized = true;
   }
 
@@ -152,9 +30,7 @@ class TextDetection {
       return;
     }
 
-    await _isolateInterpreter?.close();
     _interpreter.close();
-    _isolateInterpreter = null;
     _isInitialized = false;
   }
 
@@ -172,10 +48,6 @@ class TextDetection {
       throw StateError(
           'Unsupported input channel count: $expectedChannels. This pipeline expects 3 channels (RGB).');
     }
-  }
-
-  String _formatMs(Stopwatch stopwatch) {
-    return (stopwatch.elapsedMicroseconds / 1000.0).toStringAsFixed(1);
   }
 
   List<dynamic> _transposeNchwToNhwc(List<dynamic> input, List<int> shape) {
@@ -200,56 +72,66 @@ class TextDetection {
   }
 
   List<List<List<double>>> _postprocess(
-      List scoresRaw,
-      int scoreHeight,
-      int scoreWidth,
-      int resizedWidth,
-      int resizedHeight,
-      int originalWidth,
-      int originalHeight) {
+    List<int> rawScoreShape,
+    List<dynamic> rawScoreMap,
+    int resizedWidth,
+    int resizedHeight,
+    int originalWidth,
+    int originalHeight
+  ) {
+    late final List<dynamic> scoresRaw;
+    late final List<int> scoreShape;
+    if (rawScoreShape[3] == 2) {
+      scoresRaw = rawScoreMap;
+      scoreShape = rawScoreShape;
+    } else if (rawScoreShape[1] == 2) {
+      scoresRaw = _transposeNchwToNhwc(rawScoreMap, rawScoreShape);
+      scoreShape = [
+        rawScoreShape[0],
+        rawScoreShape[2],
+        rawScoreShape[3],
+        rawScoreShape[1],
+      ];
+    } else {
+      throw StateError(
+          'Could not find CRAFT score map with 2 channels. Shape: $rawScoreShape');
+    }
+
+    final scoreHeight = scoreShape[1];
+    final scoreWidth = scoreShape[2];
+    final scoreChannels = scoreShape[3];
+
+    if (scoreChannels < 2) {
+      throw StateError(
+          'Expected a score tensor with at least 2 channels, got: $scoreShape');
+    }
+
     const double detectionThreshold = 0.7;
     const double textThreshold = 0.4;
     const double linkThreshold = 0.1;
     const int sizeThreshold = 10;
 
     // Extract textmap and linkmap from raw scores
-    final textmap =
-        List.generate(scoreHeight, (_) => List<double>.filled(scoreWidth, 0.0));
-    final linkmap =
-        List.generate(scoreHeight, (_) => List<double>.filled(scoreWidth, 0.0));
+    final textmap = Float32List(scoreHeight * scoreWidth);
+    final linkmap = Float32List(scoreHeight * scoreWidth);
+    final combinedMap = Uint8List(scoreHeight * scoreWidth);
 
     for (var y = 0; y < scoreHeight; y++) {
       for (var x = 0; x < scoreWidth; x++) {
-        textmap[y][x] = (scoresRaw[0][y][x][0] as double);
-        linkmap[y][x] = (scoresRaw[0][y][x][1] as double);
-      }
-    }
-
-    // Binarize maps using thresholds
-    final textScore =
-        List.generate(scoreHeight, (_) => List<int>.filled(scoreWidth, 0));
-    final linkScore =
-        List.generate(scoreHeight, (_) => List<int>.filled(scoreWidth, 0));
-
-    for (var y = 0; y < scoreHeight; y++) {
-      for (var x = 0; x < scoreWidth; x++) {
-        textScore[y][x] = textmap[y][x] > textThreshold ? 1 : 0;
-        linkScore[y][x] = linkmap[y][x] > linkThreshold ? 1 : 0;
-      }
-    }
-
-    final combinedScore =
-        List.generate(scoreHeight, (_) => List<int>.filled(scoreWidth, 0));
-    for (var y = 0; y < scoreHeight; y++) {
-      for (var x = 0; x < scoreWidth; x++) {
-        combinedScore[y][x] =
-            min(1, textScore[y][x] + linkScore[y][x]); // Combine
+        int i = y * scoreWidth + x; // Flat index math
+        
+        // Read from the 4D raw scores
+        textmap[i] = scoresRaw[0][y][x][0] as double;
+        linkmap[i] = scoresRaw[0][y][x][1] as double;
+        // Binarize and combine immediately
+        int textBit = textmap[i] > textThreshold ? 1 : 0;
+        int linkBit = linkmap[i] > linkThreshold ? 1 : 0;
+        combinedMap[i] = min(1, textBit + linkBit);
       }
     }
 
     // Connected components on combined score map
-    final componentInfo = _connectedComponentsWithStats(
-        combinedScore, textmap, scoreHeight, scoreWidth);
+    final componentInfo = _connectedComponentsWithStats(combinedMap, textmap, scoreHeight, scoreWidth);
 
     final boxes = <List<List<double>>>[];
 
@@ -267,23 +149,22 @@ class TextDetection {
       }
 
       final componentPixels = component['pixels'] as List<int>;
-      final segmap =
-          List.generate(scoreHeight, (_) => List<int>.filled(scoreWidth, 0));
+      final segmap = Uint8List(scoreHeight * scoreWidth);
 
       // Build component segmap while removing link-only pixels.
       for (final pixel in componentPixels) {
         final x = pixel % scoreWidth;
         final y = pixel ~/ scoreWidth;
-        // Remove pixels that are link-only (link=1, text=0).
-        if (linkScore[y][x] == 1 && textScore[y][x] == 0) {
+        int i = y * scoreWidth + x;
+
+        if (linkmap[i] == 1 && textmap[i] == 0) {
           continue;
         }
-        segmap[y][x] = 255;
+        segmap[i] = 255;
       }
 
       // Dilate the segmentation map
-      final dilatedSegmap =
-          _dilateSegmap(segmap, scoreHeight, scoreWidth, size, bounds);
+      final dilatedSegmap = _dilateSegmap(segmap, scoreHeight, scoreWidth, size, bounds);
 
       // Extract bounding box from dilated segmap
       final box =
@@ -303,29 +184,28 @@ class TextDetection {
       originalWidth,
       originalHeight,
     );
-
     return finalPolygons;
   }
 
   List<Map<String, dynamic>> _connectedComponentsWithStats(
-      List<List<int>> combinedScore,
-      List<List<double>> textmap,
+      List<int> combinedScore,
+      List<double> textmap,
       int height,
       int width) {
-    final visited =
-        List.generate(height, (_) => List<bool>.filled(width, false));
+    final visited = List<bool>.filled(height * width, false);
     final componentInfo = <Map<String, dynamic>>[];
 
     for (var y = 0; y < height; y++) {
       for (var x = 0; x < width; x++) {
-        if (visited[y][x] || combinedScore[y][x] == 0) {
+        int i = y * width + x;
+        if (visited[i] || combinedScore[i] == 0) {
           continue;
         }
 
         // BFS to find component
-        final queue = <int>[y * width + x];
+        final queue = <int>[i];
         var queueHead = 0;
-        visited[y][x] = true;
+        visited[i] = true;
 
         var minX = x;
         var minY = y;
@@ -343,7 +223,7 @@ class TextDetection {
           pixels.add(current);
 
           // Track max text value for this component (from textmap, not combined)
-          maxTextValue = max(maxTextValue, textmap[cy][cx]);
+          maxTextValue = max(maxTextValue, textmap[current]);
 
           if (cx < minX) minX = cx;
           if (cy < minY) minY = cy;
@@ -364,13 +244,14 @@ class TextDetection {
                 nx >= width ||
                 ny < 0 ||
                 ny >= height ||
-                visited[ny][nx]) {
+                visited[ny * width + nx]) {
               continue;
             }
 
-            if (combinedScore[ny][nx] == 1) {
-              visited[ny][nx] = true;
-              queue.add(ny * width + nx);
+             int ni = ny * width + nx;
+            if (combinedScore[ni] == 1) {
+              visited[ni] = true;
+              queue.add(ni);
             }
           }
         }
@@ -394,7 +275,7 @@ class TextDetection {
     return componentInfo;
   }
 
-  List<List<int>> _dilateSegmap(List<List<int>> segmap, int height, int width,
+  Uint8List _dilateSegmap(Uint8List segmap, int height, int width,
       int size, Map<String, int> bounds) {
     final w = bounds['width'] as int;
     final h = bounds['height'] as int;
@@ -406,30 +287,30 @@ class TextDetection {
     final ex = min(bounds['right']! + niter + 1, width);
     final ey = min(bounds['bottom']! + niter + 1, height);
 
-    // Create structuring element (kernel)
     final kernelSize = 1 + niter;
     final kernelAnchor = kernelSize ~/ 2;
 
     // Apply morphological dilation to the region
-    final dilated = List.generate(height, (i) => List<int>.from(segmap[i]));
+    final dilated = Uint8List.fromList(segmap);
 
     for (var yy = sy; yy < ey; yy++) {
       for (var xx = sx; xx < ex; xx++) {
-        // Check if any pixel in kernel neighborhood is set
         bool found = false;
         for (var ky = 0; ky < kernelSize && !found; ky++) {
           for (var kx = 0; kx < kernelSize && !found; kx++) {
             final ny = yy - kernelAnchor + ky;
             final nx = xx - kernelAnchor + kx;
             if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
-              if (segmap[ny][nx] > 0) {
+              int ni = ny * width + nx;
+              if (segmap[ni] > 0) {
                 found = true;
               }
             }
           }
         }
         if (found) {
-          dilated[yy][xx] = 255;
+          int dilatedIndex = yy * width + xx;
+          dilated[dilatedIndex] = 255;
         }
       }
     }
@@ -584,12 +465,13 @@ class TextDetection {
   }
 
   List<List<double>>? _getRotatedBoundingBox(
-      List<List<int>> segmap, int height, int width) {
+      Uint8List segmap, int height, int width) {
     // Find contour points as done in the Python CRAFT utility pipeline.
     final points = <List<double>>[];
     for (var y = 0; y < height; y++) {
       for (var x = 0; x < width; x++) {
-        if (segmap[y][x] > 0) {
+        int i = y * width + x;
+        if (segmap[i] > 0) {
           points.add([x.toDouble(), y.toDouble()]);
         }
       }
@@ -709,94 +591,152 @@ class TextDetection {
     return result;
   }
 
-  Future<Map<String, dynamic>> _detectImpl(XFile imageFile) async {
-    final totalTimer = Stopwatch()..start();
-
-    _verifyModelInputShape();
-    final Uint8List uint8List = await imageFile.readAsBytes();
-
-    final targetWidth = _inputTensor.shape[3];
-    final targetHeight = _inputTensor.shape[2];
+  Future<Map<String, dynamic>> _runInference(List<dynamic> inputTensor) async {
+    
     final interpreterAddress = _interpreter.address;
+    final interpreter = Interpreter.fromAddress(interpreterAddress);
+    final outputTensors = interpreter.getOutputTensors();
 
-    final modelResult = await Isolate.run(
-      () => _runCraftPreprocessAndInference(
-        uint8List,
-        interpreterAddress,
-        targetWidth,
-        targetHeight,
+    List<int>? rawScoreShape;
+    var scoreTensorIndex = -1;
+    for (var i = 0; i < outputTensors.length; i++) {
+      final shape = outputTensors[i].shape;
+      if (shape.length != 4) {
+        throw StateError(
+            'Expected 4D output tensor for CRAFT, got shape: $shape');
+      }
+
+      if (scoreTensorIndex < 0 && (shape[3] == 2 || shape[1] == 2)) {
+        scoreTensorIndex = i;
+        rawScoreShape = shape;
+      }
+    }
+
+    if (scoreTensorIndex < 0 || rawScoreShape == null) {
+      final shapes = outputTensors.map((t) => t.shape.toString()).toList();
+      throw StateError(
+          'Could not find CRAFT score map with 2 channels. Outputs: $shapes');
+    }
+    
+    interpreter.runInference([inputTensor]);
+
+    final rawScoreMap = List.generate(
+      rawScoreShape[0],
+      (_) => List.generate(
+        rawScoreShape![1],
+        (_) => List.generate(
+          rawScoreShape![2],
+          (_) => List<double>.filled(rawScoreShape![3], 0.0),
+        ),
       ),
     );
 
-    final preprocessMs = modelResult['preprocessMs'] as double;
-    final inferenceMs = modelResult['inferenceMs'] as double;
-    final rawScoreShape = modelResult['rawScoreShape'] as List<int>;
-    final rawScoreMap = modelResult['rawScoreMap'] as List<dynamic>;
-    final resizedWidth = modelResult['resizedWidth'] as int;
-    final resizedHeight = modelResult['resizedHeight'] as int;
-    final originalWidth = modelResult['originalWidth'] as int;
-    final originalHeight = modelResult['originalHeight'] as int;
+    outputTensors[scoreTensorIndex].copyTo(rawScoreMap);
+    return {
+      'rawScoreMap': rawScoreMap,
+      'rawScoreShape': rawScoreShape,
+    };
+  }
 
-    late final List<dynamic> scoresRaw;
-    late final List<int> scoreShape;
-    if (rawScoreShape[3] == 2) {
-      scoresRaw = rawScoreMap;
-      scoreShape = rawScoreShape;
-    } else if (rawScoreShape[1] == 2) {
-      scoresRaw = _transposeNchwToNhwc(rawScoreMap, rawScoreShape);
-      scoreShape = [
-        rawScoreShape[0],
-        rawScoreShape[2],
-        rawScoreShape[3],
-        rawScoreShape[1],
-      ];
-    } else {
-      throw StateError(
-          'Could not find CRAFT score map with 2 channels. Shape: $rawScoreShape');
+  Future<Map<String, dynamic>> _preprocess(XFile imageFile) async {
+    final Uint8List imageBytes = await imageFile.readAsBytes();
+
+    final targetWidth = _inputTensor.shape[3];
+    final targetHeight = _inputTensor.shape[2];
+
+    final decodedImage = img.decodeImage(imageBytes);
+    if (decodedImage == null) {
+      throw StateError('Failed to decode input image.');
     }
 
-    final scoreHeight = scoreShape[1];
-    final scoreWidth = scoreShape[2];
-    final scoreChannels = scoreShape[3];
+    final originalWidth = decodedImage.width;
+    final originalHeight = decodedImage.height;
 
-    if (scoreChannels < 2) {
-      throw StateError(
-          'Expected a score tensor with at least 2 channels, got: $scoreShape');
+    final inputTensor = await _resize(decodedImage, targetWidth, targetHeight, originalWidth, originalHeight);
+    return {
+      'inputTensor': inputTensor.reshape([1, 3, targetHeight, targetWidth]),
+      'resizedWidth': targetWidth,
+      'resizedHeight': targetHeight,
+      'originalWidth': originalWidth,
+      'originalHeight': originalHeight,
+      };
+  }
+
+  Future<Float32List> _resize(
+    img.Image decodedImage,
+    int targetWidth,
+    int targetHeight,
+    int originalWidth,
+    int originalHeight,
+  ) async {
+    final resizedImage =
+        resizeLinearOpenCv(decodedImage, targetWidth, targetHeight);
+
+    const meanR = 123.675; // 0.485 * 255
+    const meanG = 116.28; // 0.456 * 255
+    const meanB = 103.53; // 0.406 * 255
+    const stdR = 58.395; // 0.229 * 255
+    const stdG = 57.12; // 0.224 * 255
+    const stdB = 57.375; // 0.225 * 255
+
+    final height = resizedImage.height;
+    final width = resizedImage.width;
+    final textmap = Float32List(height * width * 3);
+
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        final area = width * height;
+        final pixel = resizedImage.getPixel(x, y);
+        textmap[0 * area + y * width + x] = (pixel.r - meanR) / stdR;
+        textmap[1 * area + y * width + x] = (pixel.g - meanG) / stdG;
+        textmap[2 * area + y * width + x] = (pixel.b - meanB) / stdB;
+      }
     }
+
+    return textmap;
+  }
+
+  Future<List<LabeledBox>> detectBoxes(XFile imageFile) async {
+    final totalTimer = Stopwatch()..start();
+    _verifyModelInputShape();
+
+    final preprocessTimer = Stopwatch()..start();
+    final preprocessedData = await _preprocess(
+      imageFile,
+    );
+    final inputTensor = preprocessedData['inputTensor'] as List<dynamic>;
+    final resizedWidth = preprocessedData['resizedWidth'] as int;
+    final resizedHeight = preprocessedData['resizedHeight'] as int;
+    final originalWidth = preprocessedData['originalWidth'] as int;
+    final originalHeight = preprocessedData['originalHeight'] as int;
+    preprocessTimer.stop();
+
+    final inferenceTimer = Stopwatch()..start();
+    final inferenceResult = await _runInference(inputTensor);
+    inferenceTimer.stop();
+
+    final rawScoreShape = inferenceResult['rawScoreShape'] as List<int>;
+    final rawScoreMap = inferenceResult['rawScoreMap'] as List<dynamic>;
 
     final postprocessTimer = Stopwatch()..start();
     final polygons = _postprocess(
-      scoresRaw,
-      scoreHeight,
-      scoreWidth,
+      rawScoreShape,
+      rawScoreMap,
       resizedWidth,
       resizedHeight,
       originalWidth,
       originalHeight,
     );
-    postprocessTimer.stop();
 
+    postprocessTimer.stop();
     totalTimer.stop();
 
     print('Detection timing (ms): '
-        'preprocess=${preprocessMs.toStringAsFixed(1)}, '
-        'inference=${inferenceMs.toStringAsFixed(1)}, '
-        'postprocess=${_formatMs(postprocessTimer)}, '
-        'total=${_formatMs(totalTimer)}');
+        'preprocess=${(preprocessTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}, '
+        'inference=${(inferenceTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}, '
+        'postprocess=${(postprocessTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}, '
+        'total=${(totalTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}');
 
-    return {
-      'polygons': polygons,
-      'originalWidth': originalWidth,
-      'originalHeight': originalHeight,
-    };
-  }
-
-  Future<List<LabeledBox>> detectBoxes(XFile imageFile) async {
-    final result = await _detectImpl(imageFile);
-    final polygons = result['polygons'] as List<List<List<double>>>;
-    final originalWidth = result['originalWidth'] as int;
-    final originalHeight = result['originalHeight'] as int;
-    
     final boxes = _polygonsToAxisAlignedBoxes(polygons, originalWidth, originalHeight);
     return boxes.map((box) {
       final x = box[0];
