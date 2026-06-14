@@ -18,7 +18,7 @@ void main() {
     final detectionModel = TextDetection();
     await detectionModel.init();
 
-    final rawBoxes = await detectionModel.detectBoxes(XFile(inputPath));
+    final rawBoxes = await detectionModel.detectBoxes(await File(inputPath).readAsBytes());
     final detectionResult = OCRResult.fromRawOutput(rawBoxes);
 
     expect(detectionResult.boxes, isNotEmpty);

@@ -1,7 +1,6 @@
 import 'dart:isolate';
 import 'package:flutter/services.dart';
 
-import 'package:camera/camera.dart';
 import 'package:tflite_text_extraction/models/ocr_worker.dart';
 import 'package:tflite_text_extraction/models/result.dart';
 import 'package:tflite_text_extraction/services/text_detection.dart';
