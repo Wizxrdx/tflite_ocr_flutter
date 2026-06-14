@@ -36,8 +36,15 @@ class TextRecognition {
     _isInitialized = false;
   }
 
+  void _verifyTensorsShape() {
+    print("Model input shape: ${_inputTensor.shape}");
+    print("Model output shape: ${_interpreter.getOutputTensors().first.shape}");
+  }
+
   Future<void> recognizeText(Uint8List imageBytes, OCRResult result) async {
     final textRecognitionTimer = Stopwatch()..start();
+    _verifyTensorsShape();
+
     if (!_isInitialized) {
       throw StateError('TextRecognition model is not initialized.');
     }
@@ -61,16 +68,14 @@ class TextRecognition {
     print('Total text recognition time: ${textRecognitionTimer.elapsedMilliseconds} ms');
   }
 
-  List<List<Float32List>> _runInference(List<Float32List> preprocessedImages) {
+  List<List<List<double>>> _runInference(List<List<dynamic>> preprocessedImages) {
     final interpreter = Interpreter.fromAddress(_interpreter.address);
 
-    final result = List<List<Float32List>>.generate(preprocessedImages.length, (i) => List<Float32List>.generate(48, (j) => Float32List(37)));
+    final result = List<List<List<double>>>.generate(preprocessedImages.length, (i) => List<List<double>>.generate(48, (j) => List<double>.generate(37, (k) => 0.0)));
 
     for (int i = 0; i < preprocessedImages.length; i++) {
-      final flatImageForThisBox = preprocessedImages[i];
-
-      final inputTensorData = flatImageForThisBox.reshape([1, _inputHeight, _inputWidth, 1]);
-      final outputTensorData = List.generate(1, (_) => List.generate(48, (_) => Float32List(37)));
+      final inputTensorData = preprocessedImages[i];
+      final outputTensorData = List.generate(1, (_) => List.generate(48, (_) => List.generate(37, (_) => 0.0)));
       interpreter.run(inputTensorData, outputTensorData);
 
       result[i] = outputTensorData[0];
@@ -79,7 +84,7 @@ class TextRecognition {
     return result;
   }
 
-  Future<List<Float32List>> _preprocess(Uint8List imageBytes, OCRResult result) async {
+  Future<List<List<dynamic>>> _preprocess(Uint8List imageBytes, OCRResult result) async {
     // 1. Decode the original image ONCE before the loop
     final originalImage = img.decodeImage(imageBytes);
     if (originalImage == null) {
@@ -87,7 +92,7 @@ class TextRecognition {
       return [];
     }
     
-    List<Float32List> processedImages = [];
+    List<List<dynamic>> processedImages = [];
 
     for (int im = 0; im < result.boxes.length; im++) {
       final box = result.boxes[im];
@@ -114,12 +119,12 @@ class TextRecognition {
         }
       }
 
-      processedImages.add(boxImage);
+      processedImages.add(boxImage.reshape([1, _inputHeight, _inputWidth, 1]));
     }
     return processedImages;
   }
 
-  void _postprocess(List<List<Float32List>> sequences, OCRResult result) {
+  void _postprocess(List<List<List<double>>> sequences, OCRResult result) {
     const String alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
 
     for (int i = 0; i < sequences.length; i++) {
