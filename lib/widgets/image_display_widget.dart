@@ -191,6 +191,29 @@ class _BoxOverlayPainter extends CustomPainter {
 
       canvas.drawPath(path, shadowPaint);
       canvas.drawPath(path, highlightPaint);
+
+      final textSpan = TextSpan(
+        text: box.label,
+        style: TextStyle(
+          color: Color(0xFF00FF00),
+          fontSize: 12,
+          fontWeight: FontWeight.bold,  
+          backgroundColor: Color(0xAA000000),
+        ),
+      );
+
+      final TextPainter textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+
+      // Calculate the bottom-left X and Y of the bounding box
+      final boxBottomLeftX = (imageRect.left + (box.x / sourceImageSize.width) * imageRect.width);
+      final boxBottomLeftY = (imageRect.top + (box.y / sourceImageSize.height) * imageRect.height);
+      final textY = max(boxBottomLeftY - textPainter.height - 2, 0.0);
+      
+      textPainter.paint(canvas, Offset(boxBottomLeftX, textY));
     }
 
     canvas.restore();
