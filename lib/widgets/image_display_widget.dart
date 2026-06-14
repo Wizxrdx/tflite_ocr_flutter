@@ -169,108 +169,78 @@ class _BoxOverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final imageRect = _fitContainRect(canvasSize, sourceImageSize);
-    if (imageRect.isEmpty) {
-      return;
-    }
+    if (imageRect.isEmpty) return;
 
     canvas.save();
     canvas.clipRect(imageRect);
 
-    final shadowPaint = Paint()
-      ..color = const Color(0xFF000000).withValues(alpha: 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    final highlightPaint = Paint()
-      ..color = const Color(0xFF00FF00)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    final blockPaint = Paint()
+      ..color = const Color(0xD9FFFFFF) // 85% opacity white
+      ..style = PaintingStyle.fill;
 
     for (final box in boxes) {
-      final path = _boxToPath(box, imageRect, sourceImageSize);
+      // Calculate the physical dimensions of the box on the canvas
+      final rectLeft = imageRect.left + (box.x / sourceImageSize.width) * imageRect.width;
+      final rectTop = imageRect.top + (box.y / sourceImageSize.height) * imageRect.height;
+      final rectWidth = (box.width / sourceImageSize.width) * imageRect.width;
+      final rectHeight = (box.height / sourceImageSize.height) * imageRect.height;
 
-      canvas.drawPath(path, shadowPaint);
-      canvas.drawPath(path, highlightPaint);
-
-      final textSpan = TextSpan(
-        text: box.label,
-        style: TextStyle(
-          color: Color(0xFF00FF00),
-          fontSize: 12,
-          fontWeight: FontWeight.bold,  
-          backgroundColor: Color(0xAA000000),
-        ),
+      // Create a premium rounded rectangle
+      final RRect roundedRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(rectLeft, rectTop, rectWidth, rectHeight),
+        const Radius.circular(4.0), // Subtle rounded corners
       );
 
-      final TextPainter textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
+      // Draw the solid block to hide the original text
+      canvas.drawRRect(roundedRect, blockPaint);
 
-      // Calculate the bottom-left X and Y of the bounding box
-      final boxBottomLeftX = (imageRect.left + (box.x / sourceImageSize.width) * imageRect.width);
-      final boxBottomLeftY = (imageRect.top + (box.y / sourceImageSize.height) * imageRect.height);
-      final textY = max(boxBottomLeftY - textPainter.height - 2, 0.0);
-      
-      textPainter.paint(canvas, Offset(boxBottomLeftX, textY));
+      // Draw the recognized text inside the block
+      if (box.label != null && box.label!.isNotEmpty) {
+        final textSpan = TextSpan(
+          text: box.label,
+          style: const TextStyle(
+            color: Colors.black87, // Dark text on white background
+            fontWeight: FontWeight.w600,
+            fontFamily: 'Roboto', // Modern sleek font
+          ),
+        );
+
+        final textPainter = TextPainter(
+          text: textSpan,
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+        );
+
+        // Layout first with infinite constraints to get the text's natural size
+        textPainter.layout();
+
+        // Calculate scaling factor so the text fits perfectly inside the box padding
+        final scaleX = (rectWidth * 0.9) / textPainter.width;
+        final scaleY = (rectHeight * 0.8) / textPainter.height;
+        final scale = min(scaleX, scaleY);
+
+        canvas.save();
+        
+        // Move canvas origin to the center of the bounding box
+        canvas.translate(rectLeft + rectWidth / 2, rectTop + rectHeight / 2);
+        canvas.scale(scale); // Scale the text perfectly
+
+        // Draw the text exactly centered
+        textPainter.paint(
+          canvas,
+          Offset(-textPainter.width / 2, -textPainter.height / 2),
+        );
+
+        canvas.restore();
+      }
     }
 
     canvas.restore();
   }
 
-  Path _boxToPath(
-    LabeledBox box,
-    Rect imageRect,
-    Size imageSize,
-  ) {
-    final path = Path();
-
-    for (var i = 0; i < 4; i++) {
-      int x, y;
-      switch (i) {
-        case 0:
-          x = box.x;
-          y = box.y;
-          break;
-        case 1:
-          x = box.x + box.width;
-          y = box.y;
-          break;
-        case 2:
-          x = box.x + box.width;
-          y = box.y + box.height;
-          break;
-        case 3:
-          x = box.x;
-          y = box.y + box.height;
-          break;
-        default:
-          x = box.x;
-          y = box.y;
-      }
-      x = (imageRect.left + (x / imageSize.width) * imageRect.width).round();
-      y = (imageRect.top + (y / imageSize.height) * imageRect.height).round();
-
-      if (i == 0) {
-        path.moveTo(x.toDouble(), y.toDouble());
-      } else {
-        path.lineTo(x.toDouble(), y.toDouble());
-      }
-    }
-
-    path.close();
-    return path;
-  }
-
   Rect _fitContainRect(Size canvasSize, Size imageSize) {
-    if (canvasSize.width <= 0 || canvasSize.height <= 0) {
-      return Rect.zero;
-    }
-
-    if (imageSize.width <= 0 || imageSize.height <= 0) {
-      return Rect.zero;
-    }
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return Rect.zero;
+    if (imageSize.width <= 0 || imageSize.height <= 0) return Rect.zero;
 
     final scale = min(
       canvasSize.width / imageSize.width,
