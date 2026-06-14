@@ -66,6 +66,7 @@ class _ImageDisplayWidgetState extends State<ImageDisplayWidget> {
   Size? _resolvedSize;
   ImageStream? _stream;
   ImageStreamListener? _listener;
+  bool _showLabels = true;
 
   @override
   void initState() {
@@ -145,8 +146,28 @@ class _ImageDisplayWidgetState extends State<ImageDisplayWidget> {
                     boxes: widget.result.boxes,
                     sourceImageSize: _resolvedSize!,
                     canvasSize: Size(constraints.maxWidth, constraints.maxHeight),
+                    showLabels: _showLabels,
                   ),
                 ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: IconButton(
+                  icon: Icon(
+                    _showLabels ? Icons.translate : Icons.crop_free,
+                    color: Colors.white,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                  ),
+                  tooltip: _showLabels ? 'Show Bounding Boxes' : 'Show Text Overlay',
+                  onPressed: () {
+                    setState(() {
+                      _showLabels = !_showLabels;
+                    });
+                  },
+                ),
+              ),
             ],
           );
         },
@@ -159,11 +180,13 @@ class _BoxOverlayPainter extends CustomPainter {
   final List<LabeledBox> boxes;
   final Size sourceImageSize;
   final Size canvasSize;
+  final bool showLabels;
 
   _BoxOverlayPainter({
     required this.boxes,
     required this.sourceImageSize,
     required this.canvasSize,
+    required this.showLabels,
   });
 
   @override
@@ -178,6 +201,11 @@ class _BoxOverlayPainter extends CustomPainter {
       ..color = const Color(0xD9FFFFFF) // 85% opacity white
       ..style = PaintingStyle.fill;
 
+    final boxBorderPaint = Paint()
+      ..color = const Color(0xFF00FF00) // Neon green
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
     for (final box in boxes) {
       // Calculate the physical dimensions of the box on the canvas
       final rectLeft = imageRect.left + (box.x / sourceImageSize.width) * imageRect.width;
@@ -191,47 +219,52 @@ class _BoxOverlayPainter extends CustomPainter {
         const Radius.circular(4.0), // Subtle rounded corners
       );
 
-      // Draw the solid block to hide the original text
-      canvas.drawRRect(roundedRect, blockPaint);
+      if (showLabels) {
+        // Draw the solid block to hide the original text
+        canvas.drawRRect(roundedRect, blockPaint);
 
-      // Draw the recognized text inside the block
-      if (box.label != null && box.label!.isNotEmpty) {
-        final textSpan = TextSpan(
-          text: box.label,
-          style: const TextStyle(
-            color: Colors.black87, // Dark text on white background
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Roboto', // Modern sleek font
-          ),
-        );
+        // Draw the recognized text inside the block
+        if (box.label != null && box.label!.isNotEmpty) {
+          final textSpan = TextSpan(
+            text: box.label,
+            style: const TextStyle(
+              color: Colors.black87, // Dark text on white background
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Roboto', // Modern sleek font
+            ),
+          );
 
-        final textPainter = TextPainter(
-          text: textSpan,
-          textDirection: TextDirection.ltr,
-          maxLines: 1,
-        );
+          final textPainter = TextPainter(
+            text: textSpan,
+            textDirection: TextDirection.ltr,
+            maxLines: 1,
+          );
 
-        // Layout first with infinite constraints to get the text's natural size
-        textPainter.layout();
+          // Layout first with infinite constraints to get the text's natural size
+          textPainter.layout();
 
-        // Calculate scaling factor so the text fits perfectly inside the box padding
-        final scaleX = (rectWidth * 0.9) / textPainter.width;
-        final scaleY = (rectHeight * 0.8) / textPainter.height;
-        final scale = min(scaleX, scaleY);
+          // Calculate scaling factor so the text fits perfectly inside the box padding
+          final scaleX = (rectWidth * 0.9) / textPainter.width;
+          final scaleY = (rectHeight * 0.8) / textPainter.height;
+          final scale = min(scaleX, scaleY);
 
-        canvas.save();
-        
-        // Move canvas origin to the center of the bounding box
-        canvas.translate(rectLeft + rectWidth / 2, rectTop + rectHeight / 2);
-        canvas.scale(scale); // Scale the text perfectly
+          canvas.save();
+          
+          // Move canvas origin to the center of the bounding box
+          canvas.translate(rectLeft + rectWidth / 2, rectTop + rectHeight / 2);
+          canvas.scale(scale); // Scale the text perfectly
 
-        // Draw the text exactly centered
-        textPainter.paint(
-          canvas,
-          Offset(-textPainter.width / 2, -textPainter.height / 2),
-        );
+          // Draw the text exactly centered
+          textPainter.paint(
+            canvas,
+            Offset(-textPainter.width / 2, -textPainter.height / 2),
+          );
 
-        canvas.restore();
+          canvas.restore();
+        }
+      } else {
+        // Debug mode: Just draw the green bounding boxes without filling or labels
+        canvas.drawRRect(roundedRect, boxBorderPaint);
       }
     }
 
@@ -258,6 +291,7 @@ class _BoxOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant _BoxOverlayPainter oldDelegate) {
     return oldDelegate.boxes != boxes ||
         oldDelegate.sourceImageSize != sourceImageSize ||
-        oldDelegate.canvasSize != canvasSize;
+        oldDelegate.canvasSize != canvasSize ||
+        oldDelegate.showLabels != showLabels;
   }
 }
