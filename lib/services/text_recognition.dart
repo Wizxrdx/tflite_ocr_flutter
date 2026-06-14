@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -11,23 +10,20 @@ class TextRecognition {
   static const _modelPath = "assets/crnn_kurapan_fused.tflite";
   late Interpreter _interpreter;
   late Tensor _inputTensor;
-  IsolateInterpreter? _isolateInterpreter;
   bool _isInitialized = false;
 
-  Future<void> init() async {
-    await _loadModel();
-  }
+  get _inputBatchSize => _inputTensor.shape[0];
+  get _inputWidth => _inputTensor.shape[2];
+  get _inputHeight => _inputTensor.shape[1];
+  get _inputChannels => _inputTensor.shape[3];
 
-  Future<void> _loadModel() async {
+  Future<void> init() async {
     final options = InterpreterOptions()
       ..threads = max(1, min(4, Platform.numberOfProcessors));
+
     // Load model from assets
     _interpreter = await Interpreter.fromAsset(_modelPath, options: options);
     _inputTensor = _interpreter.getInputTensors().first;
-    _isolateInterpreter = await IsolateInterpreter.create(
-      address: _interpreter.address,
-      debugName: 'TextRecognitionIsolate',
-    );
     _isInitialized = true;
   }
 
@@ -36,154 +32,124 @@ class TextRecognition {
       return;
     }
 
-    await _isolateInterpreter?.close();
     _interpreter.close();
-    _isolateInterpreter = null;
     _isInitialized = false;
   }
 
-  void _verifyModelInputShape() {
-    final inputShape = _inputTensor.shape;
-
-    print('Model input shape: $inputShape');
-  }
-
-  String _formatMs(Stopwatch stopwatch) {
-    return (stopwatch.elapsedMicroseconds / 1000.0).toStringAsFixed(1);
-  }
-
   Future<void> recognizeText(Uint8List imageBytes, OCRResult result) async {
+    final textRecognitionTimer = Stopwatch()..start();
     if (!_isInitialized) {
       throw StateError('TextRecognition model is not initialized.');
     }
+
+    final preprocessTimer = Stopwatch()..start();
+    final preprocessedImages = await _preprocess(imageBytes, result);
+    preprocessTimer.stop();
+
+    final inferenceTimer = Stopwatch()..start();
+    final inferenceResults = _runInference(preprocessedImages);
+    inferenceTimer.stop();
+
+    final postprocessTimer = Stopwatch()..start();
+    _postprocess(inferenceResults, result);
+    postprocessTimer.stop();
+    textRecognitionTimer.stop();
+
+    print('Preprocessing time: ${preprocessTimer.elapsedMilliseconds} ms');
+    print('Inference time: ${inferenceTimer.elapsedMilliseconds} ms');
+    print('Postprocessing time: ${postprocessTimer.elapsedMilliseconds} ms');
+    print('Total text recognition time: ${textRecognitionTimer.elapsedMilliseconds} ms');
+  }
+
+  List<List<Float32List>> _runInference(List<Float32List> preprocessedImages) {
+    final interpreter = Interpreter.fromAddress(_interpreter.address);
+
+    final result = List<List<Float32List>>.generate(preprocessedImages.length, (i) => List<Float32List>.generate(48, (j) => Float32List(37)));
+
+    for (int i = 0; i < preprocessedImages.length; i++) {
+      final flatImageForThisBox = preprocessedImages[i];
+
+      final inputTensorData = flatImageForThisBox.reshape([1, _inputHeight, _inputWidth, 1]);
+      final outputTensorData = List.generate(1, (_) => List.generate(48, (_) => Float32List(37)));
+      interpreter.run(inputTensorData, outputTensorData);
+
+      result[i] = outputTensorData[0];
+    }
+
+    return result;
+  }
+
+  Future<List<Float32List>> _preprocess(Uint8List imageBytes, OCRResult result) async {
     // 1. Decode the original image ONCE before the loop
     final originalImage = img.decodeImage(imageBytes);
     if (originalImage == null) {
       print("Failed to decode image");
-      return;
+      return [];
     }
-    final int inputHeight = 31;
-    final int inputWidth = 200;
+    
+    List<Float32List> processedImages = [];
 
-    for (var box in result.boxes) {
-      // 2. Crop the image to the bounding box
-      // Note: Make sure your box.x, box.y, box.width, box.height match the image's coordinate scale
+    for (int im = 0; im < result.boxes.length; im++) {
+      final box = result.boxes[im];
+
       final cropped = img.copyCrop(
-        originalImage, 
-        x: box.x.toInt(), 
-        y: box.y.toInt(), 
-        width: box.width.toInt(), 
+        originalImage,
+        x: box.x.toInt(),
+        y: box.y.toInt(),
+        width: box.width.toInt(),
         height: box.height.toInt(),
       );
-      // 3. Resize it to the exact dimensions expected by the model (200x31)
-      final resized = img.copyResize(cropped, width: inputWidth, height: inputHeight);
-      // 4. Convert to Grayscale
+
+      final resized = img.copyResize(cropped, width: _inputWidth, height: _inputHeight);
       final grayscale = img.grayscale(resized);
-      // 5. Create the input tensor structure: [batch_size, height, width, channels] -> [1, 31, 200, 1]
-      // tflite_flutter accepts nested standard Dart Lists as input
-      var inputTensorData = List.generate(
-        1, 
-        (b) => List.generate(
-          inputHeight, 
-          (y) => List.generate(
-            inputWidth, 
-            (x) => List.filled(1, 0.0) // 1 channel (grayscale)
-          )
-        )
-      );
-      // 6. Iterate through pixels and extract/normalize the values
-      for (int y = 0; y < inputHeight; y++) {
-        for (int x = 0; x < inputWidth; x++) {
-          // Get the pixel at (x, y)
+
+      final boxImage = Float32List(_inputHeight * _inputWidth);
+
+      for (int y = 0; y < _inputHeight; y++) {
+        for (int x = 0; x < _inputWidth; x++) {
           final pixel = grayscale.getPixel(x, y);
-          
-          // Extract the luminance value (0-255). 
-          // Note: For image package >= 4.0.0 use `pixel.r` or `pixel.r.toDouble()`. 
-          // For older versions use `img.getRed(pixel)`.
           final luminance = pixel.r.toDouble(); 
           
-          // Normalize the value. 
-          // Most models expect 0.0 to 1.0 (luminance / 255.0) 
-          // Or -1.0 to 1.0 ((luminance - 127.5) / 127.5)
-          // Let's use 0.0 to 1.0 as standard, adjust if your specific model needs -1 to 1.
-          inputTensorData[0][y][x][0] = luminance / 255.0; 
-          
-          // If your model expects Float32 normalized values using mean/std mapping you would do:
-          // inputTensorData[0][y][x][0] = (luminance - mean) / std;
+          boxImage[(y * _inputWidth + x) as int] = (luminance / 255.0);
         }
       }
 
-      final address = _interpreter.address;
-      final modelResult = await Isolate.run(
-        () => _runRCNNPreprocessAndInference(
-          address,
-          inputTensorData
-        ),
-      );
-
-      final outputData = modelResult['outputData'] as List<List<List<double>>>;
-      final recognizedText = _decodeCTC(outputData[0]);
-      print('Recognized text: $recognizedText at (${box.x}, ${box.y}, ${box.width}, ${box.height})');
-      box.label = recognizedText; // Store the recognized text back in the box for later use
+      processedImages.add(boxImage);
     }
+    return processedImages;
   }
 
-  static Map<String, dynamic> _runRCNNPreprocessAndInference(
-    int address,
-    List<List<List<List<double>>>> inputTensorData
-  ) {
-    final preprocessTimer = Stopwatch()..start();
-    preprocessTimer.stop();
-
-    final interpreter = Interpreter.fromAddress(address);
-    final outputTensorData = List.generate(
-      1,
-      (i) => List.generate(
-        48,
-        (j) => List.filled(37, 0.0)
-      )
-    );
-
-    final inferenceTimer = Stopwatch()..start();
-    interpreter.run(inputTensorData, outputTensorData);
-    inferenceTimer.stop();
-
-    return {
-      'preprocessTimeMs': preprocessTimer.elapsedMicroseconds / 1000.0,
-      'inferenceTimeMs': inferenceTimer.elapsedMicroseconds / 1000.0,
-      'outputData': outputTensorData,
-    };
-  }
-
-  static String _decodeCTC(List<List<double>> sequence) {
-    // Standard Kurapan alphabet. 
-    // If your output is gibberish, your model might be using a different alphabet string.
+  void _postprocess(List<List<Float32List>> sequences, OCRResult result) {
     const String alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
-    
-    // The blank character is typically the last index (36). 
-    // (In some models, it's at index 0, and the alphabet shifts by 1).
-    const int blankIndex = 36; 
-    String decodedText = "";
-    int previousIndex = -1;
-    // Iterate through each of the 48 timesteps
-    for (int t = 0; t < sequence.length; t++) {
-      final timestepProbabilities = sequence[t];
-      // Find the index with the maximum probability (argmax)
-      int maxIndex = 0;
-      double maxProb = timestepProbabilities[0];
-      
-      for (int i = 1; i < timestepProbabilities.length; i++) {
-        if (timestepProbabilities[i] > maxProb) {
-          maxProb = timestepProbabilities[i];
-          maxIndex = i;
+
+    for (int i = 0; i < sequences.length; i++) {
+      final box = result.boxes[i];
+      final sequence = sequences[i];
+
+      const int blankIndex = 36;
+      String decodedText = "";
+      int previousIndex = -1;
+      // Iterate through each of the 48 timesteps
+      for (int t = 0; t < sequence.length; t++) {
+        final timestepProbabilities = sequence[t];
+        // Find the index with the maximum probability (argmax)
+        int maxIndex = 0;
+        double maxProb = timestepProbabilities[0];
+        
+        for (int i = 1; i < timestepProbabilities.length; i++) {
+          if (timestepProbabilities[i] > maxProb) {
+            maxProb = timestepProbabilities[i];
+            maxIndex = i;
+          }
         }
+        // CTC Rule: Ignore consecutive duplicates and ignore the blank character
+        if (maxIndex != blankIndex && maxIndex != previousIndex) {
+          decodedText += alphabet[maxIndex]; // Map index to the actual character
+        }
+        previousIndex = maxIndex;
       }
-      // CTC Rule: Ignore consecutive duplicates and ignore the blank character
-      if (maxIndex != blankIndex && maxIndex != previousIndex) {
-        decodedText += alphabet[maxIndex]; // Map index to the actual character
-      }
-      previousIndex = maxIndex;
+
+      box.label = decodedText;
     }
-    return decodedText;
   }
 }
