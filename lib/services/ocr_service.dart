@@ -54,7 +54,7 @@ class OCRService {
     _isInitialized = true;
   }
 
-  Future<OCRWorkerResponse> performOCR(String imagePath) async {
+  Future<OCRWorkerResponse> performOCR(Uint8List imageBytes) async {
     if (!_isInitialized) {
       throw StateError('OCRService is not initialized. Call init() first.');
     }
@@ -63,7 +63,7 @@ class OCRService {
     final completer = Completer<OCRWorkerResponse>();
     _pendingRequests[requestId] = completer;
 
-    _sendPortToWorker.send(OCRWorkerRequest(id: requestId, imagePath: imagePath));
+    _sendPortToWorker.send(OCRWorkerRequest(id: requestId, imageBytes: imageBytes));
 
     return completer.future;
   }

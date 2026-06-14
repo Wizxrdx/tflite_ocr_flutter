@@ -27,10 +27,9 @@ Future<void> workerEntryPoint(List<dynamic> args) async {
   await for (final message in workerReceivePort) {
     if (message is OCRWorkerRequest) {
       try {
-        final xFile = XFile(message.imagePath);
-        final imageBytes = await xFile.readAsBytes();
+        final imageBytes = message.imageBytes;
         
-        final rawResult = await textDetection.detectBoxes(xFile);
+        final rawResult = await textDetection.detectBoxes(imageBytes);
         final result = OCRResult.fromRawOutput(rawResult);
         await textRecognition.recognizeText(imageBytes, result);
 

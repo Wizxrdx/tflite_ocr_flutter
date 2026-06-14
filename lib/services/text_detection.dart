@@ -14,7 +14,7 @@ class TextDetection {
   late Interpreter _interpreter;
   late Tensor _inputTensor;
   bool _isInitialized = false;
-  
+
   int get interpreterAddress => _interpreter.address;
 
   Future<void> init({int? address}) async {
@@ -643,9 +643,7 @@ class TextDetection {
     };
   }
 
-  Future<Map<String, dynamic>> _preprocess(XFile imageFile) async {
-    final Uint8List imageBytes = await imageFile.readAsBytes();
-
+  Future<Map<String, dynamic>> _preprocess(Uint8List imageBytes) async {
     final targetWidth = _inputTensor.shape[3];
     final targetHeight = _inputTensor.shape[2];
 
@@ -701,13 +699,13 @@ class TextDetection {
     return textmap;
   }
 
-  Future<List<LabeledBox>> detectBoxes(XFile imageFile) async {
+  Future<List<LabeledBox>> detectBoxes(Uint8List imageBytes) async {
     final totalTimer = Stopwatch()..start();
     _verifyModelInputShape();
 
     final preprocessTimer = Stopwatch()..start();
     final preprocessedData = await _preprocess(
-      imageFile,
+      imageBytes,
     );
     final inputTensor = preprocessedData['inputTensor'] as List<dynamic>;
     final resizedWidth = preprocessedData['resizedWidth'] as int;

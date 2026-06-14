@@ -1,9 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:tflite_text_extraction/models/result.dart';
 
 class OCRWorkerRequest {
   final int id;
-  final String imagePath;
-  OCRWorkerRequest({required this.id, required this.imagePath});
+  final Uint8List imageBytes;
+  OCRWorkerRequest({required this.id, required this.imageBytes});
 }
 
 class OCRWorkerResponse {

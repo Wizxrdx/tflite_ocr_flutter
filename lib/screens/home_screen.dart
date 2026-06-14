@@ -160,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final detectionResult = (await _ocrService.performOCR(imageFile.path)).result!;
+      final detectionResult = (await _ocrService.performOCR(imageBytes)).result!;
 
       if (!mounted) return;
       setState(() {
