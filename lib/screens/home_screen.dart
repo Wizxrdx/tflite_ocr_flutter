@@ -53,19 +53,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: false,
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        spacing: 16,
-        children: [
-          ImagePickerButton(
-            onImagePicked: _imageProcess,
+      floatingActionButton: IgnorePointer(
+        ignoring: _isDetecting,
+        child: AnimatedOpacity(
+          opacity: _isDetecting ? 0.4 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            spacing: 16,
+            children: [
+              ImagePickerButton(
+                onImagePicked: _imageProcess,
+              ),
+              CameraButton(
+                cameras: widget.cameras,
+                onImageCaptured: _imageProcess,
+              ),
+            ],
           ),
-          CameraButton(
-            cameras: widget.cameras,
-            onImageCaptured: _imageProcess,
-          ),
-        ],
+        ),
       ),
       body: SafeArea(
         top: false,
