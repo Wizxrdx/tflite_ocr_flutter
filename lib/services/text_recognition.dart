@@ -12,15 +12,20 @@ class TextRecognition {
   late Tensor _inputTensor;
   bool _isInitialized = false;
 
+  int get interpreterAddress => _interpreter.address;
+
   get _inputWidth => _inputTensor.shape[2];
   get _inputHeight => _inputTensor.shape[1];
 
-  Future<void> init() async {
+  Future<void> init({int? address}) async {
     final options = InterpreterOptions()
       ..threads = max(1, min(4, Platform.numberOfProcessors));
 
-    // Load model from assets
-    _interpreter = await Interpreter.fromAsset(_modelPath, options: options);
+    if (address != null) {
+      _interpreter = Interpreter.fromAddress(address);
+    } else {
+      _interpreter = await Interpreter.fromAsset(_modelPath, options: options);
+    }
     _inputTensor = _interpreter.getInputTensors().first;
     _isInitialized = true;
   }

@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'package:flutter/services.dart';
 
 import 'package:tflite_text_extraction/models/ocr_worker.dart';
 import 'package:tflite_text_extraction/services/ocr_worker.dart' as worker;
+import 'package:tflite_text_extraction/services/text_detection.dart';
+import 'package:tflite_text_extraction/services/text_recognition.dart';
 
 class OCRService {
   Isolate? _ocrWorker;
@@ -11,7 +14,7 @@ class OCRService {
 
   final Map<int, Completer<OCRWorkerResponse>> _pendingRequests = {};
   int _requestIdCounter = 0;
-  bool _isInitialized = false; 
+  bool _isInitialized = false;
 
   Future<void> init() async {
     if (_isInitialized) {
@@ -22,7 +25,7 @@ class OCRService {
 
     _receivePortFromWorker.listen((message) {
       if (message is SendPort) {
-        setSendPort(message).then((_) => completer.complete());
+        _setSendPort(message).then((_) => completer.complete());
       } else if (message is OCRWorkerResponse) {
         _pendingRequests.remove(message.id)?.complete(message);
       } else if (message is OCRWorkerError) {
@@ -32,10 +35,21 @@ class OCRService {
       }
     });
 
-    _ocrWorker = await Isolate.spawn(worker.workerEntryPoint, _receivePortFromWorker.sendPort);
+    final detection = TextDetection();
+    await detection.init();
+    final recognition = TextRecognition();
+    await recognition.init();
+
+    final rootToken = RootIsolateToken.instance!;
+    _ocrWorker = await Isolate.spawn(worker.workerEntryPoint, [
+      _receivePortFromWorker.sendPort,
+      rootToken,
+      detection.interpreterAddress,
+      recognition.interpreterAddress,
+    ]);
   }
 
-  Future<void> setSendPort(SendPort sendPort) async {
+  Future<void> _setSendPort(SendPort sendPort) async {
     _sendPortToWorker = sendPort;
     _isInitialized = true;
   }
@@ -54,7 +68,7 @@ class OCRService {
     return completer.future;
   }
 
-  void dispose() {
+  Future<void> dispose() async {
     _receivePortFromWorker.close();
     _ocrWorker?.kill();
     _isInitialized = false;

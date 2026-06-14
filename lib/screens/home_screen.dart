@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:tflite_text_extraction/models/result.dart';
-import 'package:tflite_text_extraction/services/text_detection.dart';
-import 'package:tflite_text_extraction/services/text_recognition.dart';
 import 'package:tflite_text_extraction/widgets/camera_button.dart';
+import 'package:tflite_text_extraction/services/ocr_service.dart';
 import 'package:tflite_text_extraction/widgets/image_display_widget.dart' show ImageDisplayWidget;
 import 'package:tflite_text_extraction/widgets/image_picker_button.dart';
 import 'package:tflite_text_extraction/main.dart';
@@ -27,8 +26,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Uint8List? _imageBytes;
   late ImageProvider? _imageProvider;
-  late TextDetection _textDetection;
-  late TextRecognition _textRecognition;
+  late OCRService _ocrService;
   late OCRResult _boxes;
   bool _isDetecting = false;
   
@@ -37,10 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();    
 
-    _textDetection = TextDetection();
-    _textDetection.init();
-    _textRecognition = TextRecognition();
-    _textRecognition.init();
+    _ocrService = OCRService();
+    _ocrService.init();
 
     _imageBytes = null;
     _imageProvider = const AssetImage('assets/wizardiusbewebicon.png');
@@ -49,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    unawaited(_textDetection.close());
+    unawaited(_ocrService.dispose());
     super.dispose();
   }
 
@@ -164,9 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final rawBoxes = await _textDetection.detectBoxes(imageFile);
-      final detectionResult = OCRResult.fromRawOutput(rawBoxes);
-      await _textRecognition.recognizeText(imageBytes, detectionResult);
+      final detectionResult = (await _ocrService.performOCR(imageFile.path)).result!;
 
       if (!mounted) return;
       setState(() {
