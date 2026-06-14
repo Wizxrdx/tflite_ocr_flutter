@@ -12,10 +12,8 @@ class TextRecognition {
   late Tensor _inputTensor;
   bool _isInitialized = false;
 
-  get _inputBatchSize => _inputTensor.shape[0];
   get _inputWidth => _inputTensor.shape[2];
   get _inputHeight => _inputTensor.shape[1];
-  get _inputChannels => _inputTensor.shape[3];
 
   Future<void> init() async {
     final options = InterpreterOptions()
