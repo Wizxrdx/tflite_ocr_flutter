@@ -1,5 +1,6 @@
 import 'dart:isolate';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 
 import 'package:tflite_text_extraction/models/ocr_worker.dart';
 import 'package:tflite_text_extraction/models/result.dart';
@@ -26,11 +27,11 @@ Future<void> workerEntryPoint(List<dynamic> args) async {
   await for (final message in workerReceivePort) {
     if (message is OCRWorkerRequest) {
       try {
-        final imageBytes = message.imageBytes;
+        final decodedImage = img.decodeImage(message.imageBytes)!;
         
-        final rawResult = await textDetection.detectBoxes(imageBytes);
+        final rawResult = await textDetection.detectBoxes(decodedImage);
         final result = OCRResult.fromRawOutput(rawResult);
-        await textRecognition.recognizeText(imageBytes, result);
+        await textRecognition.recognizeText(decodedImage, result);
 
         // Send the final result back to the UI
         sendPortToMainThread.send(OCRWorkerResponse(id: message.id, result: result));

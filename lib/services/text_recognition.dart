@@ -44,7 +44,7 @@ class TextRecognition {
     print("Model output shape: ${_interpreter.getOutputTensors().first.shape}");
   }
 
-  Future<void> recognizeText(Uint8List imageBytes, OCRResult result) async {
+  Future<void> recognizeText(img.Image decodedImage, OCRResult result) async {
     final textRecognitionTimer = Stopwatch()..start();
     _verifyTensorsShape();
 
@@ -53,7 +53,7 @@ class TextRecognition {
     }
 
     final preprocessTimer = Stopwatch()..start();
-    final preprocessedImages = await _preprocess(imageBytes, result);
+    final preprocessedImages = await _preprocess(decodedImage, result);
     preprocessTimer.stop();
 
     final inferenceTimer = Stopwatch()..start();
@@ -65,6 +65,7 @@ class TextRecognition {
     postprocessTimer.stop();
     textRecognitionTimer.stop();
 
+    print('======= Text Recognition Timing =======');
     print('Preprocessing time: ${preprocessTimer.elapsedMilliseconds} ms');
     print('Inference time: ${inferenceTimer.elapsedMilliseconds} ms');
     print('Postprocessing time: ${postprocessTimer.elapsedMilliseconds} ms');
@@ -87,21 +88,14 @@ class TextRecognition {
     return result;
   }
 
-  Future<List<List<dynamic>>> _preprocess(Uint8List imageBytes, OCRResult result) async {
-    // 1. Decode the original image ONCE before the loop
-    final originalImage = img.decodeImage(imageBytes);
-    if (originalImage == null) {
-      print("Failed to decode image");
-      return [];
-    }
-    
+  Future<List<List<dynamic>>> _preprocess(img.Image decodedImage, OCRResult result) async {
     List<List<dynamic>> processedImages = [];
 
     for (int im = 0; im < result.boxes.length; im++) {
       final box = result.boxes[im];
 
       final cropped = img.copyCrop(
-        originalImage,
+        decodedImage,
         x: box.x.toInt(),
         y: box.y.toInt(),
         width: box.width.toInt(),

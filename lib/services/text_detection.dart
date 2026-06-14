@@ -642,14 +642,9 @@ class TextDetection {
     };
   }
 
-  Future<Map<String, dynamic>> _preprocess(Uint8List imageBytes) async {
+  Future<Map<String, dynamic>> _preprocess(img.Image decodedImage) async {
     final targetWidth = _inputTensor.shape[3];
     final targetHeight = _inputTensor.shape[2];
-
-    final decodedImage = img.decodeImage(imageBytes);
-    if (decodedImage == null) {
-      throw StateError('Failed to decode input image.');
-    }
 
     final originalWidth = decodedImage.width;
     final originalHeight = decodedImage.height;
@@ -698,18 +693,18 @@ class TextDetection {
     return textmap;
   }
 
-  Future<List<LabeledBox>> detectBoxes(Uint8List imageBytes) async {
+  Future<List<LabeledBox>> detectBoxes(img.Image decodedImage) async {
     final totalTimer = Stopwatch()..start();
     _verifyModelInputShape();
 
     final preprocessTimer = Stopwatch()..start();
     final preprocessedData = await _preprocess(
-      imageBytes,
+      decodedImage,
     );
     final inputTensor = preprocessedData['inputTensor'] as List<dynamic>;
     final resizedWidth = preprocessedData['resizedWidth'] as int;
-    final resizedHeight = preprocessedData['resizedHeight'] as int;
     final originalWidth = preprocessedData['originalWidth'] as int;
+    final resizedHeight = preprocessedData['resizedHeight'] as int;
     final originalHeight = preprocessedData['originalHeight'] as int;
     preprocessTimer.stop();
 
@@ -733,11 +728,11 @@ class TextDetection {
     postprocessTimer.stop();
     totalTimer.stop();
 
-    print('Detection timing (ms): '
-        'preprocess=${(preprocessTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}, '
-        'inference=${(inferenceTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}, '
-        'postprocess=${(postprocessTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}, '
-        'total=${(totalTimer.elapsedMicroseconds / 1000.0).toStringAsFixed(1)}');
+    print('======= Text Detection Timing =======');
+    print('Preprocessing time: ${preprocessTimer.elapsedMilliseconds} ms');
+    print('Inference time: ${inferenceTimer.elapsedMilliseconds} ms');
+    print('Postprocessing time: ${postprocessTimer.elapsedMilliseconds} ms');
+    print('Total text detection time: ${totalTimer.elapsedMilliseconds} ms');
 
     final boxes = _polygonsToAxisAlignedBoxes(polygons, originalWidth, originalHeight);
     return boxes.map((box) {
