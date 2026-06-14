@@ -103,14 +103,15 @@ class TextRecognition {
       );
 
       final resized = img.copyResize(cropped, width: _inputWidth, height: _inputHeight);
-      final grayscale = img.grayscale(resized);
-
       final boxImage = Float32List(_inputHeight * _inputWidth);
 
       for (int y = 0; y < _inputHeight; y++) {
         for (int x = 0; x < _inputWidth; x++) {
-          final pixel = grayscale.getPixel(x, y);
-          final luminance = pixel.r.toDouble(); 
+          final pixel = resized.getPixel(x, y);
+          
+          // Calculate grayscale luminance mathematically (standard formula)
+          // https://en.wikipedia.org/wiki/Grayscale
+          final luminance = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b; 
           
           boxImage[(y * _inputWidth + x) as int] = (luminance / 255.0);
         }
