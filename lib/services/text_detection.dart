@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:image/image.dart' as img;
 
-import 'package:tflite_text_extraction/helpers/image_processing.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_text_extraction/models/result.dart';
 
@@ -81,7 +80,8 @@ class TextDetection {
     int resizedWidth,
     int resizedHeight,
     int originalWidth,
-    int originalHeight
+    int originalHeight,
+    double scale
   ) {
     late final List<dynamic> scoresRaw;
     late final List<int> scoreShape;
@@ -110,28 +110,38 @@ class TextDetection {
           'Expected a score tensor with at least 2 channels, got: $scoreShape');
     }
 
-    const double detectionThreshold = 0.7;
-    const double textThreshold = 0.4;
-    const double linkThreshold = 0.1;
-    const int sizeThreshold = 10;
-
     // Extract textmap and linkmap from raw scores
     final textmap = Float32List(scoreHeight * scoreWidth);
     final linkmap = Float32List(scoreHeight * scoreWidth);
     final combinedMap = Uint8List(scoreHeight * scoreWidth);
 
+    double maxTextValue = 0.0;
+    double maxLinkValue = 0.0;
+
     for (var y = 0; y < scoreHeight; y++) {
       for (var x = 0; x < scoreWidth; x++) {
-        int i = y * scoreWidth + x; // Flat index math
+        int i = y * scoreWidth + x; 
         
-        // Read from the 4D raw scores
         textmap[i] = scoresRaw[0][y][x][0] as double;
         linkmap[i] = scoresRaw[0][y][x][1] as double;
-        // Binarize and combine immediately
-        int textBit = textmap[i] > textThreshold ? 1 : 0;
-        int linkBit = linkmap[i] > linkThreshold ? 1 : 0;
-        combinedMap[i] = min(1, textBit + linkBit);
+
+        if (textmap[i] > maxTextValue) maxTextValue = textmap[i];
+        if (linkmap[i] > maxLinkValue) maxLinkValue = linkmap[i];
       }
+    }
+
+    print('CRAFT Max Text Value: $maxTextValue, Max Link Value: $maxLinkValue');
+
+    // Dynamically adjust thresholds based on the max confidence.
+    // If the image is shrunk, confidence drops, so we lower the threshold.
+    final double actualTextThreshold = maxTextValue * 0.7; // Very strict core
+    final double actualLinkThreshold = maxLinkValue * 0.9; // Only keep the absolute strongest links
+    final double actualDetectionThreshold = maxTextValue * 0.4;
+
+    for (var i = 0; i < scoreHeight * scoreWidth; i++) {
+        int textBit = textmap[i] > actualTextThreshold ? 1 : 0;
+        int linkBit = linkmap[i] > actualLinkThreshold ? 1 : 0;
+        combinedMap[i] = min(1, textBit + linkBit);
     }
 
     // Connected components on combined score map
@@ -143,12 +153,7 @@ class TextDetection {
       final size = component['size'] as int;
       final maxTextValue = component['maxTextValue'] as double;
       final bounds = component['bounds'] as Map<String, int>;
-
-      if (size < sizeThreshold) {
-        continue;
-      }
-
-      if (maxTextValue < detectionThreshold) {
+      if (maxTextValue < actualDetectionThreshold) {
         continue;
       }
 
@@ -187,6 +192,7 @@ class TextDetection {
       resizedHeight,
       originalWidth,
       originalHeight,
+      scale
     );
     return finalPolygons;
   }
@@ -284,7 +290,9 @@ class TextDetection {
     final w = bounds['width'] as int;
     final h = bounds['height'] as int;
 
-    final niter = (sqrt(size * min(w, h) / (w * h)) * 2.0).toInt();
+    // Because the image is shrunk, boxes are already close.
+    // Use an extremely small dilation multiplier to prevent overlapping.
+    final niter = (sqrt(size * min(w, h) / (w * h)) * 3.0).toInt();
 
     final sx = max(bounds['left']! - niter, 0);
     final sy = max(bounds['top']! - niter, 0);
@@ -522,14 +530,13 @@ class TextDetection {
       List<List<List<double>>> boxes,
       int scoreWidth,
       int scoreHeight,
-      int resizedWidth,
-      int resizedHeight,
+      int targetWidth,
+      int targetHeight,
       int originalWidth,
-      int originalHeight) {
-    final scaleXResize = resizedWidth / scoreWidth;
-    final scaleYResize = resizedHeight / scoreHeight;
-    final scaleXOrig = originalWidth / resizedWidth;
-    final scaleYOrig = originalHeight / resizedHeight;
+      int originalHeight,
+      double scale
+      ) {
+    final scoreToInputRatio = targetWidth / scoreWidth;
 
     final result = <List<List<double>>>[];
 
@@ -538,18 +545,16 @@ class TextDetection {
       final scaled = <List<double>>[];
 
       for (final point in box) {
-        final x = point[0] * scaleXResize * scaleXOrig;
-        final y = point[1] * scaleYResize * scaleYOrig;
+        final x = (point[0] * scoreToInputRatio) / scale;
+        final y = (point[1] * scoreToInputRatio) / scale;
         final clampedX = x.clamp(0.0, originalWidth.toDouble()).toDouble();
         final clampedY = y.clamp(0.0, originalHeight.toDouble()).toDouble();
         scaled.add([clampedX, clampedY]);
       }
 
-      if (scaled.length < 4) {
-        continue;
+      if (scaled.length == 4) {
+        result.add(scaled);
       }
-
-      result.add(scaled);
     }
 
     return result;
@@ -596,10 +601,9 @@ class TextDetection {
   }
 
   Future<Map<String, dynamic>> _runInference(List<dynamic> inputTensor) async {
-    
-    final interpreterAddress = _interpreter.address;
-    final interpreter = Interpreter.fromAddress(interpreterAddress);
-    final outputTensors = interpreter.getOutputTensors();
+    // We already have _interpreter initialized in this isolate!
+    // Creating a new Interpreter from address causes its internal shape cache to desync.
+    final outputTensors = _interpreter.getOutputTensors();
 
     List<int>? rawScoreShape;
     var scoreTensorIndex = -1;
@@ -622,7 +626,7 @@ class TextDetection {
           'Could not find CRAFT score map with 2 channels. Outputs: $shapes');
     }
     
-    interpreter.runInference([inputTensor]);
+    _interpreter.runInference([inputTensor]);
 
     final rawScoreMap = List.generate(
       rawScoreShape[0],
@@ -649,48 +653,47 @@ class TextDetection {
     final originalWidth = decodedImage.width;
     final originalHeight = decodedImage.height;
 
-    final inputTensor = await _resize(decodedImage, targetWidth, targetHeight, originalWidth, originalHeight);
-    return {
-      'inputTensor': inputTensor.reshape([1, 3, targetHeight, targetWidth]),
-      'resizedWidth': targetWidth,
-      'resizedHeight': targetHeight,
-      'originalWidth': originalWidth,
-      'originalHeight': originalHeight,
-      };
-  }
+    final scale = min(targetWidth / originalWidth, targetHeight / originalHeight);
+    final newWidth = (originalWidth * scale).toInt();
+    final newHeight = (originalHeight * scale).toInt();
 
-  Future<Float32List> _resize(
-    img.Image decodedImage,
-    int targetWidth,
-    int targetHeight,
-    int originalWidth,
-    int originalHeight,
-  ) async {
-    final resizedImage =
-        resizeLinearOpenCv(decodedImage, targetWidth, targetHeight);
+    final resizedImage = img.copyResize(decodedImage, width: newWidth, height: newHeight);
 
-    const meanR = 123.675; // 0.485 * 255
-    const meanG = 116.28; // 0.456 * 255
-    const meanB = 103.53; // 0.406 * 255
-    const stdR = 58.395; // 0.229 * 255
-    const stdG = 57.12; // 0.224 * 255
-    const stdB = 57.375; // 0.225 * 255
+    final textmap = Float32List(targetHeight * targetWidth * 3);
 
-    final height = resizedImage.height;
-    final width = resizedImage.width;
-    final textmap = Float32List(height * width * 3);
+    const meanR = 123.675; 
+    const meanG = 116.28; 
+    const meanB = 103.53; 
+    const stdR = 58.395; 
+    const stdG = 57.12; 
+    const stdB = 57.375;
 
-    for (var y = 0; y < height; y++) {
-      for (var x = 0; x < width; x++) {
-        final area = width * height;
-        final pixel = resizedImage.getPixel(x, y);
-        textmap[0 * area + y * width + x] = (pixel.r - meanR) / stdR;
-        textmap[1 * area + y * width + x] = (pixel.g - meanG) / stdG;
-        textmap[2 * area + y * width + x] = (pixel.b - meanB) / stdB;
+    for (var y = 0; y < targetHeight; y++) {
+      for (var x = 0; x < targetWidth; x++) {
+        final area = targetWidth * targetHeight;
+        
+        // Pad with 0 for normalized input (black padding)
+        if (x < newWidth && y < newHeight) {
+            final pixel = resizedImage.getPixel(x, y);
+            textmap[0 * area + y * targetWidth + x] = (pixel.r - meanR) / stdR;
+            textmap[1 * area + y * targetWidth + x] = (pixel.g - meanG) / stdG;
+            textmap[2 * area + y * targetWidth + x] = (pixel.b - meanB) / stdB;
+        } else {
+            textmap[0 * area + y * targetWidth + x] = -meanR / stdR;
+            textmap[1 * area + y * targetWidth + x] = -meanG / stdG;
+            textmap[2 * area + y * targetWidth + x] = -meanB / stdB;
+        }
       }
     }
 
-    return textmap;
+    return {
+      'inputTensor': textmap.reshape([1, 3, targetHeight, targetWidth]),
+      'scale': scale,
+      'targetHeight': targetHeight,
+      'targetWidth': targetWidth,
+      'originalWidth': originalWidth,
+      'originalHeight': originalHeight,
+    };
   }
 
   Future<List<LabeledBox>> detectBoxes(img.Image decodedImage) async {
@@ -702,9 +705,10 @@ class TextDetection {
       decodedImage,
     );
     final inputTensor = preprocessedData['inputTensor'] as List<dynamic>;
-    final resizedWidth = preprocessedData['resizedWidth'] as int;
+    final scale = preprocessedData['scale'] as double;
+    final targetHeight = preprocessedData['targetHeight'] as int;
+    final targetWidth = preprocessedData['targetWidth'] as int;
     final originalWidth = preprocessedData['originalWidth'] as int;
-    final resizedHeight = preprocessedData['resizedHeight'] as int;
     final originalHeight = preprocessedData['originalHeight'] as int;
     preprocessTimer.stop();
 
@@ -719,10 +723,11 @@ class TextDetection {
     final polygons = _postprocess(
       rawScoreShape,
       rawScoreMap,
-      resizedWidth,
-      resizedHeight,
+      targetWidth,
+      targetHeight,
       originalWidth,
       originalHeight,
+      scale
     );
 
     postprocessTimer.stop();
